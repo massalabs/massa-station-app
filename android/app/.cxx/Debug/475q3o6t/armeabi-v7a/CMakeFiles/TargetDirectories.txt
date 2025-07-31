@@ -1,0 +1,2 @@
+/Users/jwmdev/Development/github/nafsilabs/mug/android/app/.cxx/Debug/475q3o6t/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/jwmdev/Development/github/nafsilabs/mug/android/app/.cxx/Debug/475q3o6t/armeabi-v7a/CMakeFiles/rebuild_cache.dir
