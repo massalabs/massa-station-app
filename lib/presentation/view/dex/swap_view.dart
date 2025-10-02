@@ -1,4 +1,5 @@
 // Flutter imports:
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:mug/constants/asset_names.dart';
 
 // Project imports:
+import 'package:mug/presentation/provider/dashboard_provider.dart';
 import 'package:mug/presentation/provider/setting_provider.dart';
 import 'package:mug/presentation/provider/swap_provider.dart';
 import 'package:mug/presentation/provider/wallet_list_provider.dart';
@@ -26,13 +28,63 @@ class SwapView extends ConsumerStatefulWidget {
   ConsumerState<SwapView> createState() => _DexViewState();
 }
 
-class _DexViewState extends ConsumerState<SwapView> {
+class _DexViewState extends ConsumerState<SwapView> with AutomaticKeepAliveClientMixin {
+  static final Map<String, DateTime> _lastFetchMap = {};
+  Timer? _refreshTimer;
+
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((duration) {
-      ref.read(swapProvider.notifier).initialLoad(widget.accountAddress);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchIfNeeded();
     });
+  }
+
+  @override
+  void didUpdateWidget(SwapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Fetch if address changed
+    if (oldWidget.accountAddress != widget.accountAddress) {
+      _fetchIfNeeded();
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      _fetch();
+    });
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  void _fetch() {
+    final now = DateTime.now();
+    final key = widget.accountAddress;
+    _lastFetchMap[key] = now;
+    ref.read(swapProvider.notifier).initialLoad(widget.accountAddress);
+  }
+
+  void _fetchIfNeeded() {
+    final now = DateTime.now();
+    final key = widget.accountAddress;
+    final lastFetch = _lastFetchMap[key];
+
+    if (lastFetch == null || now.difference(lastFetch).inSeconds >= 10) {
+      _fetch();
+    }
   }
 
   final TextEditingController _fromAmountController = TextEditingController();
@@ -40,6 +92,29 @@ class _DexViewState extends ConsumerState<SwapView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
+    final buildTime = DateTime.now();
+    print('🟢 SwapView build at: ${buildTime.millisecondsSinceEpoch}');
+
+    // Listen to tab changes and start/stop timer
+    final currentTab = ref.watch(dashboardProvider);
+    if (currentTab == 1) {
+      // We're on swap tab - start timer if not running
+      if (_refreshTimer == null || !_refreshTimer!.isActive) {
+        _startRefreshTimer();
+      }
+      // Fetch data when this tab becomes visible (but rate limited)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchIfNeeded();
+      });
+    } else {
+      // We're not on swap tab - stop timer
+      if (_refreshTimer != null && _refreshTimer!.isActive) {
+        _stopRefreshTimer();
+      }
+    }
+
     final swapState = ref.watch(swapProvider);
     final notifier = ref.read(swapProvider.notifier);
     return CommonPadding(

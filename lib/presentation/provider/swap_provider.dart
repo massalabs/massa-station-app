@@ -62,6 +62,9 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
     final cachedBalance1 = cachedBalances?["MAS"];
     final cachedBalance2 = cachedBalances?["USDC"];
 
+    // Preserve the current exchange rate if we're refreshing
+    final previousExchangeRate = state.accountAddress == accountAddress ? state.exchangeRate : null;
+
     state = SwapState(
       accountAddress: accountAddress,
       selectedDropdown1: "MAS",
@@ -70,13 +73,20 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
       showNotification: false,
       balance1: cachedBalance1,
       balance2: cachedBalance2,
+      exchangeRate: previousExchangeRate,
+      status: cachedBalance1 != null && cachedBalance2 != null ? SwapStatus.swap : SwapStatus.loading,
     );
-    await updateSwapRate();
+
+    // Don't await - let it run in background
+    updateSwapRate();
   }
 
   @override
   Future<void> updateSwapRate() async {
-    state = state.copyWith(status: SwapStatus.loading);
+    // Only set loading if we don't have cached balances
+    if (state.balance1 == null || state.balance2 == null) {
+      state = state.copyWith(status: SwapStatus.loading);
+    }
     await _getTokenBalances(
       state.accountAddress!,
     );
@@ -103,6 +113,9 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
               binSteps: response.binSteps,
               tokenPath: response.router,
               exchangeRate: bigIntToDecimal(response.amounts[1], getTokenDecimal(token2)));
+          if (kDebugMode) {
+            print('🔄 Swap rate updated: 1 MAS = ${entity.exchangeRate} ${state.selectedDropdown2}');
+          }
           state = state.copyWith(
             swapEntity: entity,
             exchangeRate: entity.exchangeRate,
@@ -127,6 +140,9 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
               binSteps: response.binSteps,
               tokenPath: response.router,
               exchangeRate: bigIntToDecimal(response.amounts[1], getTokenDecimal(token1)));
+          if (kDebugMode) {
+            print('🔄 Swap rate updated: 1 ${state.selectedDropdown1} = ${entity.exchangeRate} MAS');
+          }
           state = state.copyWith(
             swapEntity: entity,
             exchangeRate: entity.exchangeRate,

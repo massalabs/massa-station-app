@@ -1,4 +1,5 @@
 // Flutter imports:
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,6 +11,7 @@ import 'package:mug/constants/constants.dart';
 
 // Project imports:
 import 'package:mug/data/model/wallet_model.dart';
+import 'package:mug/presentation/provider/dashboard_provider.dart';
 import 'package:mug/presentation/provider/screen_title_provider.dart';
 import 'package:mug/presentation/provider/setting_provider.dart';
 import 'package:mug/presentation/provider/wallet_list_provider.dart';
@@ -38,23 +40,95 @@ class WalletView extends ConsumerStatefulWidget {
   ConsumerState<WalletView> createState() => _WalletViewState();
 }
 
-class _WalletViewState extends ConsumerState<WalletView> {
+class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAliveClientMixin {
+  static final Map<String, DateTime> _lastFetchMap = {};
+  Timer? _refreshTimer;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    final initTime = DateTime.now();
+    print('🟢 WalletView initState for ${widget.arg.name ?? widget.arg.address} at: ${initTime.millisecondsSinceEpoch}');
     // Trigger wallet information loading
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      ref.read(walletProvider.notifier).getWalletInformation(widget.arg.address, widget.arg.hasBalance);
-      await ref.read(walletNameProvider.notifier).loadWalletName(widget.arg.address);
+      _fetchIfNeeded();
     });
   }
 
   @override
+  void didUpdateWidget(WalletView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the wallet address changed, reload the wallet data
+    if (oldWidget.arg.address != widget.arg.address) {
+      print('🔄 WalletView address changed from ${oldWidget.arg.address} to ${widget.arg.address}');
+      _fetchIfNeeded();
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      _fetchIfNeeded();
+    });
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  void _fetchIfNeeded() {
+    if (!mounted) return;
+
+    final now = DateTime.now();
+    final key = widget.arg.address;
+    final lastFetch = _lastFetchMap[key];
+
+    if (lastFetch == null || now.difference(lastFetch).inSeconds >= 10) {
+      _lastFetchMap[key] = now;
+      print('💰 WalletView fetching data for $key');
+      ref.read(walletProvider.notifier).getWalletInformation(widget.arg.address, widget.arg.hasBalance);
+      ref.read(walletNameProvider.notifier).loadWalletName(widget.arg.address);
+    } else {
+      print('⏭️ WalletView skipping fetch (last fetch ${now.difference(lastFetch).inSeconds}s ago)');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     final isDarkTheme = ref.watch(settingProvider).darkTheme;
 
-    final walletName = ref.watch(walletNameProvider);
+    // Watch dashboard to detect when wallet tab is visible
+    final currentTab = ref.watch(dashboardProvider);
+    final walletSelection = ref.watch(walletSelectionProvider);
+    final isVisible = currentTab == 0 && walletSelection != null;
+
+    // Start/stop timer based on visibility
+    if (isVisible) {
+      if (_refreshTimer == null || !_refreshTimer!.isActive) {
+        _startRefreshTimer();
+      }
+    } else {
+      if (_refreshTimer != null && _refreshTimer!.isActive) {
+        _stopRefreshTimer();
+      }
+    }
+
+    // Use the name from the argument immediately to avoid flickering
+    final walletName = widget.arg.name ?? shortenString(widget.arg.address, 4);
+    final buildTime = DateTime.now();
+    print('🟡 WalletView build for $walletName at: ${buildTime.millisecondsSinceEpoch}');
 
     return Scaffold(
       body: CommonPadding(

@@ -1,9 +1,11 @@
 // Flutter imports:
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 // Package imports:
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mug/constants/constants.dart';
+import 'package:mug/presentation/provider/dashboard_provider.dart';
 import 'package:mug/presentation/provider/search_provider.dart';
 
 // Project imports:
@@ -21,19 +23,75 @@ class ExplorerView extends ConsumerStatefulWidget {
   ConsumerState<ExplorerView> createState() => _ExplorerViewState();
 }
 
-class _ExplorerViewState extends ConsumerState<ExplorerView> {
+class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepAliveClientMixin {
+  static DateTime? _lastFetch;
+  Timer? _refreshTimer;
+
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((duration) {
-      ref.read(stakerProvider.notifier).getStakers(0);
+      _fetchIfNeeded();
     });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      _fetchIfNeeded();
+    });
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  void _fetchIfNeeded() {
+    if (!mounted) return;
+
+    final now = DateTime.now();
+    final lastFetch = _lastFetch;
+
+    if (lastFetch == null || now.difference(lastFetch) > const Duration(seconds: 10)) {
+      _lastFetch = now;
+      print('🔍 ExplorerView fetching stakers data');
+      ref.read(stakerProvider.notifier).getStakers(0);
+    } else {
+      print('⏭️ ExplorerView skipping fetch (last fetch ${now.difference(lastFetch).inSeconds}s ago)');
+    }
   }
 
   final TextEditingController _searchText = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
+    // Watch dashboard to detect when explorer tab is visible
+    final currentTab = ref.watch(dashboardProvider);
+    final isVisible = currentTab == 2;
+
+    // Start/stop timer based on visibility
+    if (isVisible) {
+      if (_refreshTimer == null || !_refreshTimer!.isActive) {
+        _startRefreshTimer();
+      }
+    } else {
+      if (_refreshTimer != null && _refreshTimer!.isActive) {
+        _stopRefreshTimer();
+      }
+    }
+
     return Scaffold(
       body: CommonPadding(
         child: RefreshIndicator(

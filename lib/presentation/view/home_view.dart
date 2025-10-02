@@ -28,46 +28,20 @@ class Home extends ConsumerStatefulWidget {
 }
 
 class _DashboardState extends ConsumerState<Home> {
-  Widget _buildSwapView() {
-    final selectedWallet = ref.watch(walletSelectionProvider);
-
-    if (selectedWallet == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'No wallet selected',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  ref.read(dashboardProvider.notifier).changeIndexBottom(index: 0);
-                },
-                child: const Text('Select Wallet'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Skip DexView and go directly to swap with selected wallet
-    // Allow even with insufficient balance - will be caught later
-    return SwapView(selectedWallet.address);
-  }
-
   final listOfWidgets = [
     const WalletsView(),
-    null, // DexView will be handled by _buildSwapView()
+    null, // SwapView will be built dynamically
     const ExplorerView(),
     const SettingView(),
   ];
-  
+
   bool _showSettings = false;
+
+  // Cache swap view widgets per address
+  final Map<String, Widget> _swapViewCache = {};
+
+  // Cache wallet detail widgets per address
+  final Map<String, Widget> _walletDetailCache = {};
 
   Widget _buildAppBarTitle() {
     return MediaQuery.of(context).orientation == Orientation.portrait
@@ -100,35 +74,94 @@ class _DashboardState extends ConsumerState<Home> {
   Widget _buildBody() {
     final selectedWallet = ref.watch(walletSelectionProvider);
     final state = ref.watch(dashboardProvider);
-    
+    final buildBodyTime = DateTime.now();
+    print('🟡 _buildBody called for tab $state at: ${buildBodyTime.millisecondsSinceEpoch}');
+
     if (_showSettings) {
       return const SettingView();
     }
-    
-    // Only show wallet detail when on Wallets tab and a wallet is selected
-    if (selectedWallet != null && state == 0) {
-      return Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton(
-              onPressed: () {
-                ref.read(walletSelectionProvider.notifier).clearSelection();
-              },
-              child: const Text('Change Wallet'),
+
+    // Use IndexedStack to keep all tabs alive for instant switching
+    // Build swap view only once per wallet selection and cache it
+    final swapViewWidget = selectedWallet != null
+        ? _swapViewCache.putIfAbsent(
+            selectedWallet.address,
+            () => SwapView(selectedWallet.address, key: ValueKey(selectedWallet.address)),
+          )
+        : Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'No wallet selected',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      ref.read(dashboardProvider.notifier).changeIndexBottom(index: 0);
+                    },
+                    child: const Text('Select Wallet'),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+    // Get or create the cached wallet view for the selected wallet
+    Widget? walletDetailWidget;
+    if (selectedWallet != null) {
+      walletDetailWidget = _walletDetailCache.putIfAbsent(
+        selectedWallet.address,
+        () {
+          print('📦 Creating new WalletView widget for ${selectedWallet.address}');
+          return WalletView(selectedWallet, key: ValueKey(selectedWallet.address));
+        },
+      );
+      print('📋 Using cached WalletView for ${selectedWallet.address}, cache size: ${_walletDetailCache.length}');
+    }
+
+    final indexedStack = IndexedStack(
+      index: state,
+      children: [
+        listOfWidgets[0]!,  // WalletsView
+        swapViewWidget,     // SwapView - cached per wallet
+        listOfWidgets[2]!,  // ExplorerView
+      ],
+    );
+
+    // Overlay wallet detail if needed (but keep widget in tree even when hidden)
+    return Stack(
+      children: [
+        indexedStack,
+        // Always include wallet detail in tree, but only show it when on wallet tab with selection
+        if (walletDetailWidget != null)
+          Offstage(
+            offstage: !(selectedWallet != null && state == 0),
+            child: Container(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        ref.read(walletSelectionProvider.notifier).clearSelection();
+                      },
+                      child: const Text('Change Wallet'),
+                    ),
+                  ),
+                  Expanded(
+                    child: walletDetailWidget,
+                  ),
+                ],
+              ),
             ),
           ),
-          Expanded(child: WalletView(selectedWallet)),
-        ],
-      );
-    }
-    
-    // Handle Swap tab specially
-    if (state == 1) {
-      return _buildSwapView();
-    }
-    
-    return listOfWidgets.elementAt(state)!;
+      ],
+    );
   }
 
   @override
@@ -172,8 +205,10 @@ class _DashboardState extends ConsumerState<Home> {
       body: _buildBody(),
       bottomNavigationBar: NavigationBar(
         selectedIndex: state,
-        animationDuration: const Duration(milliseconds: 600),
+        animationDuration: Duration.zero,
         onDestinationSelected: (int index) {
+          final tapTime = DateTime.now();
+          print('🔵 Tab $index tapped at: ${tapTime.millisecondsSinceEpoch}');
           setState(() {
             _showSettings = false;
           });

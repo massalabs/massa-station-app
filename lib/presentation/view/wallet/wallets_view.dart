@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mug/presentation/provider/setting_provider.dart';
 import 'package:mug/presentation/provider/wallet_list_provider.dart';
+import 'package:mug/presentation/provider/wallet_provider.dart';
 import 'package:mug/presentation/provider/wallet_selection_provider.dart';
 import 'package:mug/presentation/view/wallet/wallet_view.dart';
 
@@ -13,11 +14,40 @@ import 'package:mug/routes/routes_name.dart';
 import 'package:mug/presentation/widget/widget.dart';
 import 'package:mug/utils/number_helpers.dart';
 
-class WalletsView extends ConsumerWidget {
+class WalletsView extends ConsumerStatefulWidget {
   const WalletsView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WalletsView> createState() => _WalletsViewState();
+}
+
+class _WalletsViewState extends ConsumerState<WalletsView> with AutomaticKeepAliveClientMixin {
+  static DateTime? _lastFetch;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((duration) {
+      _fetchIfNeeded();
+    });
+  }
+
+  void _fetchIfNeeded() {
+    final now = DateTime.now();
+    final lastFetch = _lastFetch;
+
+    if (lastFetch == null || now.difference(lastFetch) > const Duration(seconds: 10)) {
+      _lastFetch = now;
+      ref.read(walletListProvider.notifier).loadWallets();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
     final walletState = ref.watch(walletListProvider);
 
     return Scaffold(
@@ -35,7 +65,7 @@ class WalletsView extends ConsumerWidget {
                     child: Text(
                         "It is very lonely here! No wallet found! You can create a new wallet or import an existing wallet."),
                   ),
-                  _addImport(context, ref)
+                  _addImport(context)
                 ],
               );
             }
@@ -72,9 +102,16 @@ class WalletsView extends ConsumerWidget {
                       final wallet = wallets.wallets[index];
                       return GestureDetector(
                         onTap: () async {
+                          final tapTime = DateTime.now();
+                          print('🔵 Wallet tapped at: ${tapTime.millisecondsSinceEpoch}');
+
                           final hasBalance =
                               wallet.addressInformation!.finalBalance >= ref.read(settingProvider).feeAmount;
                           final WalletViewArg walletViewArg = WalletViewArg(wallet.address, wallet.name, hasBalance);
+
+                          // Preload wallet data to avoid flickering
+                          ref.read(walletProvider.notifier).getWalletInformation(wallet.address, hasBalance);
+
                           ref.read(walletSelectionProvider.notifier).selectWallet(walletViewArg);
                         },
                         child: Card(
@@ -111,7 +148,7 @@ class WalletsView extends ConsumerWidget {
                     },
                   ),
                 ),
-                _addImport(context, ref)
+                _addImport(context)
               ],
             );
           },
@@ -151,7 +188,7 @@ class WalletsView extends ConsumerWidget {
     );
   }
 
-  Row _addImport(BuildContext context, WidgetRef ref) {
+  Row _addImport(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
