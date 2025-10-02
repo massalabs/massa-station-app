@@ -32,6 +32,9 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
   // Cache for wallet data (address -> AddressEntity)
   final Map<String, AddressEntity> _walletCache = {};
 
+  // Track current address to ignore stale responses
+  String? _currentAddress;
+
   WalletProviderImpl({
     required this.explorerUseCase,
     required this.localStorageService,
@@ -39,6 +42,9 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
 
   @override
   Future<void> getWalletInformation(String address, bool getTokenBalance) async {
+    // Update current address
+    _currentAddress = address;
+
     // Show cached data immediately if available, otherwise show placeholder
     if (_walletCache.containsKey(address)) {
       state = WalletSuccess(addressEntity: _walletCache[address]!);
@@ -63,6 +69,15 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
 
     // Fetch fresh data in background
     final result = await explorerUseCase.getAddress(address, getTokenBalance);
+
+    // Only update if this is still the current address (ignore stale responses)
+    if (_currentAddress != address) {
+      if (kDebugMode) {
+        print('Ignoring stale wallet data for $address (current: $_currentAddress)');
+      }
+      return;
+    }
+
     switch (result) {
       case Success(value: final response):
         _walletCache[address] = response; // Cache the result
