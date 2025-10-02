@@ -121,11 +121,11 @@ class _WalletViewState extends ConsumerState<WalletView> {
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       Text(
-                                        "Balance: ${formatNumber4(addressEntity.finalBalance)} MAS",
+                                        "Balance: ${addressEntity.finalBalance < 0 ? '-' : '${formatNumber4(addressEntity.finalBalance)} MAS'}",
                                         textAlign: TextAlign.center,
                                         style: TextStyle(fontSize: Constants.fontSize),
                                       ),
-                                      if (addressEntity.finalRolls > 0)
+                                      if (addressEntity.finalRolls >= 0 && addressEntity.finalRolls > 0)
                                         Text(
                                           "Rolls: ${addressEntity.finalRolls}",
                                           textAlign: TextAlign.center,
@@ -160,32 +160,39 @@ class _WalletViewState extends ConsumerState<WalletView> {
                                 child: TabBarView(
                                   children: [
                                     // Assets Tab
-                                    ListView.builder(
-                                      padding: const EdgeInsets.all(16.0),
-                                      itemCount: addressEntity.tokenBalances?.length,
-                                      itemBuilder: (context, index) {
-                                        return Column(
-                                          children: [
-                                            ListTile(
-                                              leading: SvgPicture.asset(addressEntity.tokenBalances![index].iconPath,
-                                                  semanticsLabel: addressEntity.tokenBalances?[index].name.name,
-                                                  height: 40.0,
-                                                  width: 40.0),
-                                              title: Text(
-                                                '${addressEntity.tokenBalances?[index].balance}  ${addressEntity.tokenBalances?[index].name.name}',
-                                                style: TextStyle(fontSize: Constants.fontSize),
-                                              ),
+                                    addressEntity.tokenBalances == null
+                                        ? const Center(
+                                            child: Padding(
+                                              padding: EdgeInsets.all(16.0),
+                                              child: Text('-', style: TextStyle(fontSize: 24)),
                                             ),
-                                            Divider(thickness: 0.5, color: Colors.brown[500]),
-                                          ],
-                                        );
-                                      },
-                                    ),
+                                          )
+                                        : ListView.builder(
+                                            padding: const EdgeInsets.all(16.0),
+                                            itemCount: addressEntity.tokenBalances?.length,
+                                            itemBuilder: (context, index) {
+                                              return Column(
+                                                children: [
+                                                  ListTile(
+                                                    leading: SvgPicture.asset(addressEntity.tokenBalances![index].iconPath,
+                                                        semanticsLabel: addressEntity.tokenBalances?[index].name.name,
+                                                        height: 40.0,
+                                                        width: 40.0),
+                                                    title: Text(
+                                                      '${addressEntity.tokenBalances?[index].balance}  ${addressEntity.tokenBalances?[index].name.name}',
+                                                      style: TextStyle(fontSize: Constants.fontSize),
+                                                    ),
+                                                  ),
+                                                  Divider(thickness: 0.5, color: Colors.brown[500]),
+                                                ],
+                                              );
+                                            },
+                                          ),
 
-                                    if (addressEntity.transactionHistory != null)
-                                      Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: ht.HorizontalDataTable(
+                                    addressEntity.transactionHistory != null
+                                        ? Padding(
+                                            padding: const EdgeInsets.all(16.0),
+                                            child: ht.HorizontalDataTable(
                                           leftHandSideColumnWidth: 100,
                                           rightHandSideColumnWidth: 700,
                                           isFixedHeader: true,
@@ -210,10 +217,14 @@ class _WalletViewState extends ConsumerState<WalletView> {
                                             return buildRightSideItem(ref, context, history!, index);
                                           },
                                           itemCount: addressEntity.transactionHistory!.combinedHistory!.length,
-                                        ),
-                                      ),
-                                    if (addressEntity.transactionHistory == null)
-                                      const Text("No transaction history found"),
+                                            ),
+                                          )
+                                        : const Center(
+                                            child: Padding(
+                                              padding: EdgeInsets.all(16.0),
+                                              child: Text('-', style: TextStyle(fontSize: 24)),
+                                            ),
+                                          ),
 
                                     Column(
                                       children: [

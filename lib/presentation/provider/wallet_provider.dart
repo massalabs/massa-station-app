@@ -29,6 +29,9 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
   final ExplorerUseCase explorerUseCase;
   final LocalStorageService localStorageService;
 
+  // Cache for wallet data (address -> AddressEntity)
+  final Map<String, AddressEntity> _walletCache = {};
+
   WalletProviderImpl({
     required this.explorerUseCase,
     required this.localStorageService,
@@ -36,13 +39,41 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
 
   @override
   Future<void> getWalletInformation(String address, bool getTokenBalance) async {
-    state = WalletLoading();
+    // Show cached data immediately if available, otherwise show placeholder
+    if (_walletCache.containsKey(address)) {
+      state = WalletSuccess(addressEntity: _walletCache[address]!);
+    } else {
+      // Show placeholder with address so UI can render immediately
+      state = WalletSuccess(
+        addressEntity: AddressEntity(
+          address: address,
+          thread: 0,
+          finalBalance: -1, // Use -1 to indicate loading
+          candidateBalance: -1,
+          finalRolls: -1,
+          candidateRolls: -1,
+          activeRoles: -1,
+          createdBlocks: -1,
+          createdEndorsements: -1,
+          transactionHistory: null,
+          tokenBalances: null,
+        ),
+      );
+    }
+
+    // Fetch fresh data in background
     final result = await explorerUseCase.getAddress(address, getTokenBalance);
     switch (result) {
       case Success(value: final response):
+        _walletCache[address] = response; // Cache the result
         state = WalletSuccess(addressEntity: response);
       case Failure(exception: final exception):
-        state = WalletFailure(message: 'Something went wrong: $exception');
+        // If we have cached data, keep showing it even on error
+        if (_walletCache.containsKey(address)) {
+          state = WalletSuccess(addressEntity: _walletCache[address]!);
+        } else {
+          state = WalletFailure(message: 'Something went wrong: $exception');
+        }
     }
   }
 

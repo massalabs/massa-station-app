@@ -31,6 +31,8 @@ class TransferView extends ConsumerStatefulWidget {
 class _TransferViewState extends ConsumerState<TransferView> {
   late final TextEditingController amountController;
   late final TextEditingController addressController;
+  late final FocusNode amountFocusNode;
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   bool _showWarning = true;
 
   @override
@@ -38,7 +40,8 @@ class _TransferViewState extends ConsumerState<TransferView> {
     super.initState();
     amountController = TextEditingController();
     addressController = TextEditingController();
-    
+    amountFocusNode = FocusNode();
+
     // Listen for changes to update warning visibility
     amountController.addListener(_updateWarningVisibility);
     addressController.addListener(_updateWarningVisibility);
@@ -50,6 +53,7 @@ class _TransferViewState extends ConsumerState<TransferView> {
     addressController.removeListener(_updateWarningVisibility);
     amountController.dispose();
     addressController.dispose();
+    amountFocusNode.dispose();
     super.dispose();
   }
 
@@ -61,8 +65,6 @@ class _TransferViewState extends ConsumerState<TransferView> {
 
   @override
   Widget build(BuildContext context) {
-
-    final formKey = GlobalKey<FormState>();
     final transactionFee = ref.watch(settingProvider).feeAmount;
 
     final screenTitle = ref.watch(screenTitleProvider);
@@ -87,24 +89,9 @@ class _TransferViewState extends ConsumerState<TransferView> {
                   TransferInitial() => Column(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        Card(
-                          child: ListTile(
-                            leading: Text(
-                              "Available Balance",
-                              style: TextStyle(fontSize: Constants.fontSize),
-                            ),
-                            title: Text(
-                              "${formatNumber4(widget.addressEntity.finalBalance)} MAS",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 18),
-                            ),
-                            //subtitle: const Text("MAS", textAlign: TextAlign.center),
-                          ),
-                        ),
                         const SizedBox(height: 10),
                         CustomLabelWidget(
-                            label: "Sending Address",
-                            //value: Text(addressEntity.address, style: const TextStyle(fontSize: 20))),
+                            label: "From",
                             value: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                               Text(shortenString(widget.addressEntity.address, 26), style: const TextStyle(fontSize: 20)),
                               IconButton(
@@ -117,7 +104,7 @@ class _TransferViewState extends ConsumerState<TransferView> {
                             ])),
                         const SizedBox(height: 10),
                         CustomLabelWidget(
-                          label: "Recipient Address",
+                          label: "To",
                           value: AddressSelectorWidget(
                               currentAddress: widget.addressEntity.address, addressController: addressController),
                         ),
@@ -125,69 +112,125 @@ class _TransferViewState extends ConsumerState<TransferView> {
                         Card(
                           elevation: 4,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color.fromARGB(255, 46, 53, 56), // Border color
-                                width: 1.5, // Border width
-                              ),
-                              borderRadius: BorderRadius.circular(12), // Rounded corners
-                            ),
-                            child: Row(
-                              children: [
-                                // TextFormField
-                                Expanded(
-                                  child: Form(
-                                    key: formKey,
-                                    child: TextFormField(
-                                      enabled: true,
-                                      controller: amountController,
-                                      onChanged: (value) {},
-                                      //keyboardType: TextInputType.number,
-                                      decoration: const InputDecoration(
-                                        hintText: '0.0000',
-                                        border: InputBorder.none, // Removes internal border for seamless look
-                                      ),
-                                      style: const TextStyle(color: Colors.white, fontSize: 26),
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      inputFormatters: <TextInputFormatter>[
-                                        FilteringTextInputFormatter.allow(RegExp(r'^\d+(\.\d*)?')),
-                                      ],
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return 'Please enter a value';
-                                        }
-                                        try {
-                                          final enteredValue = double.parse(value);
-                                          if (enteredValue > widget.addressEntity.finalBalance - transactionFee) {
-                                            return 'Value should not exceed ${widget.addressEntity.finalBalance - transactionFee}';
-                                          }
-                                        } catch (e) {
-                                          return 'Please enter a valid decimal number';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10), // Add some spacing between dropdown and text box
-                                Column(
+                          child: Stack(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
+                                child: Column(
                                   children: [
                                     Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        SvgPicture.asset(AssetName.mas,
-                                            semanticsLabel: "MAS", height: 40.0, width: 40.0),
-                                        const SizedBox(width: 10),
-                                        const Text("MAS", style: TextStyle(fontSize: 24))
+                                        Expanded(
+                                          child: Form(
+                                            key: formKey,
+                                            child: TextFormField(
+                                              enabled: true,
+                                              controller: amountController,
+                                              focusNode: amountFocusNode,
+                                              onChanged: (value) {},
+                                              decoration: const InputDecoration(
+                                                hintText: '0.0000',
+                                                border: InputBorder.none,
+                                              ),
+                                              style: const TextStyle(fontSize: 20),
+                                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                              inputFormatters: <TextInputFormatter>[
+                                                FilteringTextInputFormatter.allow(RegExp(r'^\d+(\.\d*)?')),
+                                              ],
+                                              validator: (value) {
+                                                if (value == null || value.isEmpty) {
+                                                  return 'Please enter a value';
+                                                }
+                                                try {
+                                                  final enteredValue = double.parse(value);
+                                                  if (enteredValue > widget.addressEntity.finalBalance - transactionFee) {
+                                                    return 'Value should not exceed ${widget.addressEntity.finalBalance - transactionFee}';
+                                                  }
+                                                } catch (e) {
+                                                  return 'Please enter a valid decimal number';
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        const Text("MAS", style: TextStyle(fontSize: 20)),
                                       ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text("Fee: ${ref.watch(settingProvider).feeAmount} MAS"),
+                                    const SizedBox(height: 8),
+                                    GestureDetector(
+                                      onTap: () {
+                                        final availableBalance = widget.addressEntity.finalBalance - transactionFee;
+                                        if (availableBalance > 0) {
+                                          FocusScope.of(context).unfocus();
+                                          Future.delayed(const Duration(milliseconds: 50), () {
+                                            amountController.text = formatNumber4(availableBalance);
+                                            amountFocusNode.requestFocus();
+                                          });
+                                        }
+                                      },
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: Text(
+                                          "Balance: ${formatNumber4(widget.addressEntity.finalBalance - transactionFee)} MAS",
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              Positioned(
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                                  decoration: const BoxDecoration(
+                                    color: Color.fromARGB(255, 46, 53, 56),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(8),
+                                      bottomRight: Radius.circular(8),
+                                    ),
+                                  ),
+                                  child: const Text("Amount"),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: Stack(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 10),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "${transactionFee} MAS",
+                                      style: const TextStyle(fontSize: 20),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Positioned(
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                                  decoration: const BoxDecoration(
+                                    color: Color.fromARGB(255, 46, 53, 56),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(8),
+                                      bottomRight: Radius.circular(8),
+                                    ),
+                                  ),
+                                  child: const Text("Fee"),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 10),
