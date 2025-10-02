@@ -228,6 +228,7 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                         // Tabs for Assets and Transactions
                         DefaultTabController(
                           length: 3,
+                          animationDuration: Duration.zero,
                           child: Column(
                             children: [
                               TabBar(
@@ -243,6 +244,7 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                               SizedBox(
                                 height: 500, // or MediaQuery.of(context).size.height * 0.6, adjust as needed
                                 child: TabBarView(
+                                  physics: const NeverScrollableScrollPhysics(),
                                   children: [
                                     // Assets Tab
                                     addressEntity.tokenBalances == null

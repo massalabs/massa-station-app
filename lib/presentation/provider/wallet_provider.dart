@@ -67,8 +67,12 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
       );
     }
 
-    // Fetch fresh data in background
-    final result = await explorerUseCase.getAddress(address, getTokenBalance);
+    // Start both fetches in parallel
+    final masBalanceFuture = explorerUseCase.getAddress(address, false);
+    final tokenBalanceFuture = getTokenBalance ? explorerUseCase.getAddress(address, true) : null;
+
+    // Update with MAS balance as soon as it arrives (fast)
+    final masResult = await masBalanceFuture;
 
     // Only update if this is still the current address (ignore stale responses)
     if (_currentAddress != address) {
@@ -78,10 +82,37 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
       return;
     }
 
-    switch (result) {
+    switch (masResult) {
       case Success(value: final response):
-        _walletCache[address] = response; // Cache the result
-        state = WalletSuccess(addressEntity: response);
+        // If we have cached tokens, preserve them while updating MAS balance
+        final cachedTokens = _walletCache[address]?.tokenBalances;
+        final entityWithCachedTokens = cachedTokens != null
+            ? response.copyWith(tokenBalances: cachedTokens)
+            : response;
+
+        // Update with MAS balance immediately (preserving cached tokens if available)
+        state = WalletSuccess(addressEntity: entityWithCachedTokens);
+
+        // Wait for token balances if requested
+        if (tokenBalanceFuture != null) {
+          final tokenResult = await tokenBalanceFuture;
+
+          // Check again if address is still current
+          if (_currentAddress != address) {
+            if (kDebugMode) {
+              print('Ignoring stale token data for $address (current: $_currentAddress)');
+            }
+            return;
+          }
+
+          if (tokenResult is Success) {
+            final updatedEntity = (tokenResult as Success<AddressEntity, Exception>).value;
+            _walletCache[address] = updatedEntity;
+            state = WalletSuccess(addressEntity: updatedEntity);
+          }
+        } else {
+          _walletCache[address] = response;
+        }
       case Failure(exception: final exception):
         // If we have cached data, keep showing it even on error
         if (_walletCache.containsKey(address)) {
