@@ -71,6 +71,12 @@ class WalletUseCaseImpl implements WalletUseCase {
       final walletString = await localStorageService.getStoredWallets();
       if (walletString.isNotEmpty) {
         wallets = WalletModel.decode(walletString);
+
+        // Return empty wallet data if no wallets (prevents network call on empty list)
+        if (wallets.isEmpty) {
+          return Success(value: walletData);
+        }
+
         List<String> walletAddresses = [];
         for (var w in wallets) {
           walletAddresses.add(w.address);
@@ -82,9 +88,15 @@ class WalletUseCaseImpl implements WalletUseCase {
           Success(value: final resp) => resp,
           Failure() => null,
         };
+
+        // Handle repository failure gracefully
+        if (addressesEntity == null) {
+          return Failure(exception: Exception('Failed to load wallet addresses'));
+        }
+
         var i = 0;
         for (var w in wallets) {
-          w.addressInformation = addressesEntity![i];
+          w.addressInformation = addressesEntity[i];
           walletData.finalBalance += addressesEntity[i].finalBalance;
           walletData.rolls += addressesEntity[i].finalRolls;
           i++;

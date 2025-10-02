@@ -14,6 +14,7 @@ import 'package:local_session_timeout/local_session_timeout.dart';
 
 // Project imports:
 import 'package:mug/presentation/provider/local_session_timeout_provider.dart';
+import 'package:mug/presentation/provider/wallet_list_provider.dart';
 import 'package:mug/routes/routes.dart';
 import 'package:mug/service/provider.dart';
 import 'package:mug/presentation/widget/widget.dart';
@@ -459,8 +460,17 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
 
   Future<void> _clearAllData() async {
     await ref.read(localStorageServiceProvider).clearAllData();
+
     if (mounted) {
-      Navigator.pushReplacementNamed(context, AuthRoutes.authWall, arguments: false);
+      // Reload wallet list to clear cached data (same as retry button does)
+      await ref.read(walletListProvider.notifier).loadWallets();
+
+      // Navigate to root
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AuthRoutes.root,
+        (Route<dynamic> route) => false,
+      );
     }
   }
 
