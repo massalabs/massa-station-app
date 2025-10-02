@@ -51,13 +51,7 @@ class _DexViewState extends ConsumerState<SwapView> {
           builder: (context, ref, child) {
             var isDarkTheme = ref.watch(settingProvider).darkTheme;
             return switch (swapState.status) {
-                SwapStatus.loading => Container(
-                    color: Colors.black.withOpacity(0.0), // Semi-transparent overlay
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                SwapStatus.swap => Padding(
+                SwapStatus.loading || SwapStatus.swap => Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: SingleChildScrollView(
                       child: Column(
@@ -125,7 +119,9 @@ class _DexViewState extends ConsumerState<SwapView> {
                                             Colors.grey[900], // Optional: Set dropdown background color for dark theme
                                       ),
                                       Text(
-                                        "Balance: ${formatNumber4(swapState.balance1!)}",
+                                        swapState.balance1 != null
+                                          ? "Balance: ${formatNumber4(swapState.balance1!)}"
+                                          : "Balance: ...",
                                         style: const TextStyle(color: Colors.grey, fontSize: 14),
                                       )
                                     ],
@@ -212,7 +208,9 @@ class _DexViewState extends ConsumerState<SwapView> {
                                             Colors.grey[900], // Optional: Set dropdown background color for dark theme
                                       ),
                                       Text(
-                                        "Balance: ${formatNumber4(swapState.balance2!)}",
+                                        swapState.balance2 != null
+                                          ? "Balance: ${formatNumber4(swapState.balance2!)}"
+                                          : "Balance: ...",
                                         style: const TextStyle(color: Colors.grey, fontSize: 14),
                                       )
                                     ],
@@ -222,7 +220,9 @@ class _DexViewState extends ConsumerState<SwapView> {
                             ),
                           ),
                           const SizedBox(height: 10),
-                          Text("1 MAS = ${swapState.exchangeRate} ${notifier.getOtherTokenName()}"),
+                          Text(swapState.exchangeRate != null
+                            ? "1 MAS = ${swapState.exchangeRate} ${notifier.getOtherTokenName()}"
+                            : "1 MAS = ..."),
                           ButtonWidget(
                             isDarkTheme: isDarkTheme,
                             text: "Swap",

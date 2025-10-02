@@ -20,18 +20,33 @@ abstract base class StakerProvider extends StateNotifier<StakerState> {
 base class ExplorerProviderImpl extends StateNotifier<StakerState> implements StakerProvider {
   final ExplorerUseCase useCase;
   late Result<StakersEntity, Exception> result;
+
+  // Cache for stakers data
+  StakersEntity? _cachedStakers;
+
   ExplorerProviderImpl({
     required this.useCase,
   }) : super(StakerInitial());
 
   @override
   Future<void> getStakers(int pageNumber) async {
-    state = StakerLoading();
+    // Show cached data immediately if available
+    if (_cachedStakers != null) {
+      state = StakersSuccess(stakers: _cachedStakers!);
+    } else {
+      state = StakerLoading();
+    }
+
     result = await useCase.getStakers(pageNumber);
     final response = switch (result) {
       Success(value: final response) => StakersSuccess(stakers: response),
       Failure(exception: final exception) => StakerFailure(message: 'Something went wrong: $exception'),
     };
+
+    // Cache the result on success
+    if (response is StakersSuccess) {
+      _cachedStakers = response.stakers;
+    }
 
     state = response;
     _debug();

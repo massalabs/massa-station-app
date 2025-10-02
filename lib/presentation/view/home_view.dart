@@ -183,14 +183,17 @@ class _DashboardState extends ConsumerState<Home> {
           NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),
             label: 'WALLETS',
+            tooltip: '',
           ),
           NavigationDestination(
             icon: Icon(Icons.currency_exchange_outlined),
             label: 'SWAP',
+            tooltip: '',
           ),
           NavigationDestination(
             icon: Icon(Icons.explore_outlined),
             label: 'EXPLORE',
+            tooltip: '',
           ),
         ],
       ),

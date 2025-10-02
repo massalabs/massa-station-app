@@ -36,7 +36,12 @@ final tokenItems = {
 
 base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProvider {
   final DexUseCase useCase;
-  SwapProviderImpl({required this.useCase})
+  final Ref ref;
+
+  // Cache for balances (address -> token -> balance)
+  final Map<String, Map<String, double>> _balanceCache = {};
+
+  SwapProviderImpl({required this.useCase, required this.ref})
       : super(SwapState(
           selectedDropdown1: "MAS",
           selectedDropdown2: "USDC",
@@ -52,12 +57,19 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
 
   @override
   Future<void> initialLoad(String accountAddress) async {
+    // Get cached balances from the balance cache if available
+    final cachedBalances = _balanceCache[accountAddress];
+    final cachedBalance1 = cachedBalances?["MAS"];
+    final cachedBalance2 = cachedBalances?["USDC"];
+
     state = SwapState(
       accountAddress: accountAddress,
       selectedDropdown1: "MAS",
       selectedDropdown2: "USDC",
       allItems: tokenItems,
       showNotification: false,
+      balance1: cachedBalance1,
+      balance2: cachedBalance2,
     );
     await updateSwapRate();
   }
@@ -150,6 +162,12 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
         accountAddress,
       );
     }
+
+    // Cache the balances
+    _balanceCache[accountAddress] = {
+      state.selectedDropdown1!: balance1,
+      state.selectedDropdown2!: balance2,
+    };
 
     state = state.copyWith(
       balance1: balance1,
@@ -279,5 +297,5 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
 }
 
 final swapProvider = StateNotifierProvider<SwapProvider, SwapState>((ref) {
-  return SwapProviderImpl(useCase: ref.watch(dexUseCaseProvider));
+  return SwapProviderImpl(useCase: ref.watch(dexUseCaseProvider), ref: ref);
 });
