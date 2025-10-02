@@ -140,6 +140,48 @@ class _SettingViewState extends ConsumerState<SettingView> {
             ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Session Timeout:"),
+                  const HelpInfo(
+                      message:
+                          'Session will automatically logout after this period of inactivity to protect your wallet.'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Consumer(
+                      builder: (context, ref, child) {
+                        final currentIndex = ref.read(localStorageServiceProvider).inactivityTimeoutIndex;
+                        final timeoutOptions = [30, 60, 120, 180, 300, 600, 900];
+                        final timeoutLabels = ['30s', '1m', '2m', '3m', '5m', '10m', '15m'];
+
+                        return DropdownButton<int>(
+                          value: currentIndex,
+                          isExpanded: true,
+                          items: List.generate(timeoutOptions.length, (index) {
+                            return DropdownMenuItem<int>(
+                              value: index,
+                              child: Text(timeoutLabels[index]),
+                            );
+                          }),
+                          onChanged: (newIndex) async {
+                            if (newIndex != null) {
+                              await ref.read(localStorageServiceProvider).setInactivityTimeoutIndex(index: newIndex);
+                              if (mounted) {
+                                informationSnackBarMessage(context, "Session timeout changed to ${timeoutLabels[newIndex]}. Will apply on next login.");
+                              }
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text(
                 "Logout",

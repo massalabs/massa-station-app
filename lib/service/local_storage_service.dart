@@ -64,7 +64,7 @@ class LocalStorageService {
     await setSecureString('passphrase_verify_hash', base64.encode(verifyHash));
 
     // Cache master key in RAM for immediate use
-    SessionManager().setMasterKey(masterKey, timeout: Duration(seconds: inactivityTimeout));
+    SessionManager().setMasterKey(masterKey);
   }
 
   /// Verify passphrase and cache master key in RAM
@@ -89,7 +89,7 @@ class LocalStorageService {
     }
 
     // Passphrase correct - cache master key in RAM
-    SessionManager().setMasterKey(masterKey, timeout: Duration(seconds: inactivityTimeout));
+    SessionManager().setMasterKey(masterKey);
 
     return true;
   }
@@ -147,7 +147,7 @@ class LocalStorageService {
     return choices[index];
   }
 
-  int get inactivityTimeoutIndex => sharedPreferences.getInt(StorageKeys.inactivityTimeout) ?? 3;
+  int get inactivityTimeoutIndex => sharedPreferences.getInt(StorageKeys.inactivityTimeout) ?? 4;
 
   Future<void> setInactivityTimeoutIndex({required int index}) async =>
       await sharedPreferences.setInt(StorageKeys.inactivityTimeout, index);

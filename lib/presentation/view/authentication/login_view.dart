@@ -100,23 +100,22 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
         body: Consumer(
           builder: (context, watch, _) {
             _session = watch.read(localSessionTimeoutProvider);
-            return CustomScrollView(
+            return SingleChildScrollView(
               controller: _scrollController,
-              slivers: [
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: bottom),
-                    child: Column(
-                      children: [
-                        const Spacer(),
-                        _buildLoginWorkflow(context: context),
-                        const Spacer(),
-                      ],
-                    ),
-                  ),
+              physics: const ClampingScrollPhysics(),
+              child: Container(
+                height: MediaQuery.of(context).size.height -
+                        MediaQuery.of(context).padding.top -
+                        kToolbarHeight,
+                padding: EdgeInsets.only(bottom: bottom),
+                child: Column(
+                  children: [
+                    SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                    _buildLoginWorkflow(context: context),
+                    const Spacer(),
+                  ],
                 ),
-              ],
+              ),
             );
           },
         ),
@@ -145,7 +144,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
             _buildTimeOut(),
             _inputField(),
             _buildLoginButton(),
-            const SizedBox(height: 60), // Add significant spacing
+            const SizedBox(height: 120), // Increased spacing to push "Forgot Passphrase" down
             _buildForgotPassphrase(),
           ],
         ),

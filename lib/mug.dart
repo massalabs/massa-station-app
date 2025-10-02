@@ -32,6 +32,7 @@ class _MugState extends ConsumerState<Mug> {
   late final int focusTimeout;
   late final int inactivityTimeout;
   late final LocalStorageService _storage;
+  late final SessionConfig sessionConfig;
 
   @override
   void initState() {
@@ -39,7 +40,7 @@ class _MugState extends ConsumerState<Mug> {
     _storage = ref.read(localStorageServiceProvider);
     focusTimeout = _storage.focusTimeout;
     inactivityTimeout = _storage.inactivityTimeout;
-    final sessionConfig = SessionConfig(
+    sessionConfig = SessionConfig(
       invalidateSessionForAppLostFocus: Duration(seconds: focusTimeout),
       invalidateSessionForUserInactivity: Duration(seconds: inactivityTimeout),
     );
@@ -51,10 +52,7 @@ class _MugState extends ConsumerState<Mug> {
   @override
   Widget build(BuildContext context) {
     return SessionTimeoutManager(
-      sessionConfig: SessionConfig(
-        invalidateSessionForAppLostFocus: Duration(seconds: focusTimeout),
-        invalidateSessionForUserInactivity: Duration(seconds: inactivityTimeout),
-      ),
+      sessionConfig: sessionConfig,
       child: App(
         navigatorKey: navigatorKey,
       ),
@@ -62,14 +60,20 @@ class _MugState extends ConsumerState<Mug> {
   }
 
   Future<void> sessionHandler(SessionTimeoutState timeoutEvent) async {
+    print('Session timeout event: $timeoutEvent');
+    print('Is user active: ${_storage.isUserActive}');
+    print('Is inactivity timeout on: ${_storage.isInactivityTimeoutOn}');
+
     sessionStateStream.add(SessionState.stopListening);
     BuildContext context = navigatorKey.currentContext!;
     if (timeoutEvent == SessionTimeoutState.userInactivityTimeout && _storage.isInactivityTimeoutOn) {
+      print('Handling user inactivity timeout');
       await onTimeOutDo(
         context: context,
         showPreLogoffAlert: true,
       );
     } else if (timeoutEvent == SessionTimeoutState.appFocusTimeout) {
+      print('Handling app focus timeout');
       await onTimeOutDo(
         context: context,
         showPreLogoffAlert: false,
@@ -78,15 +82,25 @@ class _MugState extends ConsumerState<Mug> {
   }
 
   Future<void> onTimeOutDo({required BuildContext context, required bool showPreLogoffAlert}) async {
+    print('onTimeOutDo called, showPreLogoffAlert: $showPreLogoffAlert');
     if (_storage.isUserActive) {
+      print('User is active, proceeding with logout flow');
       bool? isUserActive;
-      if (showPreLogoffAlert) isUserActive = await preInactivityLogOffAlert(context);
+      if (showPreLogoffAlert) {
+        print('Showing pre-logout alert');
+        isUserActive = await preInactivityLogOffAlert(context);
+        print('User response to alert: $isUserActive');
+      }
       if (isUserActive == null || showPreLogoffAlert == false) {
+        print('Logging out with message');
         logout(showLogoutMsg: true);
       }
       if (isUserActive == false) {
+        print('Logging out without message');
         logout(showLogoutMsg: false);
       }
+    } else {
+      print('User is NOT active, skipping logout');
     }
   }
 

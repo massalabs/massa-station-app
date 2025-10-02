@@ -15,6 +15,7 @@ import 'package:mug/presentation/provider/wallet_provider.dart';
 import 'package:mug/presentation/state/wallet_state.dart';
 import 'package:mug/presentation/widget/widget.dart';
 import 'package:mug/routes/routes_name.dart';
+import 'package:mug/service/provider.dart';
 import 'package:mug/utils/number_helpers.dart';
 import 'package:mug/utils/string_helpers.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -248,6 +249,60 @@ class _WalletViewState extends ConsumerState<WalletView> {
                                               ),
                                               OutlinedButton.icon(
                                                   onPressed: () async {
+                                                    // Re-authenticate before showing private key
+                                                    final passphrase = await _showPassphraseDialog(context);
+                                                    if (passphrase == null) return; // User cancelled
+
+                                                    // Show loading dialog during PBKDF2
+                                                    if (context.mounted) {
+                                                      showDialog(
+                                                        context: context,
+                                                        barrierDismissible: false,
+                                                        builder: (BuildContext context) {
+                                                          return WillPopScope(
+                                                            onWillPop: () async => false,
+                                                            child: Dialog(
+                                                              backgroundColor: Colors.transparent,
+                                                              elevation: 0,
+                                                              child: Container(
+                                                                padding: const EdgeInsets.all(20),
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors.grey[900],
+                                                                  borderRadius: BorderRadius.circular(10),
+                                                                ),
+                                                                child: Column(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  children: const [
+                                                                    CircularProgressIndicator(),
+                                                                    SizedBox(height: 20),
+                                                                    Text(
+                                                                      'Verifying passphrase...',
+                                                                      style: TextStyle(color: Colors.white),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                      );
+                                                    }
+
+                                                    // Verify passphrase
+                                                    final isValid = await ref.read(localStorageServiceProvider).verifyAndCacheMasterKey(passphrase);
+
+                                                    // Close loading dialog
+                                                    if (context.mounted) {
+                                                      Navigator.of(context).pop();
+                                                    }
+
+                                                    if (!isValid) {
+                                                      if (context.mounted) {
+                                                        informationSnackBarMessage(context, "Wrong passphrase!");
+                                                      }
+                                                      return;
+                                                    }
+
                                                     final wallet = await ref
                                                         .read(walletProvider.notifier)
                                                         .getWalletKey(addressEntity.address);
@@ -429,6 +484,57 @@ class _WalletViewState extends ConsumerState<WalletView> {
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  Future<String?> _showPassphraseDialog(BuildContext context) async {
+    final passphraseController = TextEditingController();
+    bool isHidden = true;
+
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Enter Passphrase'),
+              content: TextField(
+                controller: passphraseController,
+                obscureText: isHidden,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Passphrase',
+                  prefixIcon: const Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    icon: Icon(isHidden ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () {
+                      setState(() {
+                        isHidden = !isHidden;
+                      });
+                    },
+                  ),
+                ),
+                onSubmitted: (value) {
+                  Navigator.of(context).pop(value);
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(passphraseController.text);
+                  },
+                  child: const Text('Confirm'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
