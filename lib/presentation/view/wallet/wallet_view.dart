@@ -9,9 +9,12 @@ import 'package:horizontal_data_table/horizontal_data_table.dart' as ht;
 import 'package:mug/constants/constants.dart';
 
 // Project imports:
+import 'package:mug/data/model/wallet_model.dart';
 import 'package:mug/presentation/provider/screen_title_provider.dart';
 import 'package:mug/presentation/provider/setting_provider.dart';
+import 'package:mug/presentation/provider/wallet_list_provider.dart';
 import 'package:mug/presentation/provider/wallet_provider.dart';
+import 'package:mug/presentation/provider/wallet_selection_provider.dart';
 import 'package:mug/presentation/state/wallet_state.dart';
 import 'package:mug/presentation/widget/widget.dart';
 import 'package:mug/routes/routes_name.dart';
@@ -317,6 +320,29 @@ class _WalletViewState extends ConsumerState<WalletView> {
                                           ),
                                         ),
                                         Divider(thickness: 0.5, color: Colors.brown[500]),
+                                        Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "Remove Wallet",
+                                                style: TextStyle(fontSize: Constants.fontSize, color: Colors.red),
+                                              ),
+                                              OutlinedButton.icon(
+                                                  onPressed: () async {
+                                                    await _showRemoveWalletDialog(context, addressEntity.address);
+                                                  },
+                                                  style: OutlinedButton.styleFrom(
+                                                    foregroundColor: Colors.red,
+                                                    side: const BorderSide(color: Colors.red),
+                                                  ),
+                                                  label: const Text("Remove"),
+                                                  icon: const Icon(Icons.delete_outline)),
+                                            ],
+                                          ),
+                                        ),
+                                        Divider(thickness: 0.5, color: Colors.brown[500]),
                                       ],
                                     )
                                   ],
@@ -538,6 +564,86 @@ class _WalletViewState extends ConsumerState<WalletView> {
         );
       },
     );
+  }
+
+  Future<void> _showRemoveWalletDialog(BuildContext context, String address) async {
+    final shortAddress = shortenString(address, Constants.shortedAddressLength);
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Remove Wallet'),
+          content: Text(
+            'Are you sure you want to remove $shortAddress wallet address?\n\nMake sure you have backed up your private key. This action cannot be undone!',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _removeWallet(address);
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _removeWallet(String address) async {
+    print('Starting wallet removal for: $address');
+
+    // Get all wallets
+    final walletString = await ref.read(localStorageServiceProvider).getStoredWallets();
+    if (walletString.isEmpty) {
+      print('No wallets found');
+      return;
+    }
+
+    final wallets = WalletModel.decode(walletString);
+    print('Current wallet count: ${wallets.length}');
+
+    // Check if this is the only wallet
+    if (wallets.length == 1) {
+      print('Cannot remove last wallet');
+      if (mounted) {
+        informationSnackBarMessage(context, "Cannot remove the last wallet!");
+      }
+      return;
+    }
+
+    // Remove the wallet
+    wallets.removeWhere((wallet) => wallet.address == address);
+    print('Wallets after removal: ${wallets.length}');
+    await ref.read(localStorageServiceProvider).storeWallets(WalletModel.encode(wallets));
+
+    // Check if this was the default wallet
+    final defaultWallet = await ref.read(localStorageServiceProvider).getDefaultWallet();
+    print('Default wallet: $defaultWallet');
+    if (defaultWallet == address) {
+      print('Removed wallet was default, setting new default: ${wallets.first.address}');
+      await ref.read(localStorageServiceProvider).setDefaultWallet(wallets.first.address);
+      ref.invalidate(accountProvider);
+      ref.invalidate(smartContractServiceProvider);
+    }
+
+    if (mounted) {
+      print('Clearing wallet selection to go back to list');
+      // Clear the wallet selection to return to wallet list
+      ref.read(walletSelectionProvider.notifier).clearSelection();
+
+      // Reload wallet list
+      print('Reloading wallet list');
+      await ref.read(walletListProvider.notifier).loadWallets();
+
+      print('Showing success message');
+      informationSnackBarMessage(context, "Wallet removed successfully!");
+    }
   }
 
   Future<bool?> privateKeyBottomSheet(BuildContext context, String privateKey, bool isDarkTheme) async {
