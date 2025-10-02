@@ -98,7 +98,8 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
           );
           break;
         case Failure():
-          state = state.copyWith(status: SwapStatus.error);
+          // Allow swap UI to show even if rate loading fails
+          state = state.copyWith(status: SwapStatus.swap, exchangeRate: 0.0);
       }
     } else {
       final result = await useCase.findBestPathFromAmountOut(state.accountAddress!, TokenName.WMAS, token1, 1.0);
@@ -121,7 +122,8 @@ base class SwapProviderImpl extends StateNotifier<SwapState> implements SwapProv
           );
           break;
         case Failure():
-          state = state.copyWith(status: SwapStatus.error);
+          // Allow swap UI to show even if rate loading fails
+          state = state.copyWith(status: SwapStatus.swap, exchangeRate: 0.0);
       }
     }
   }

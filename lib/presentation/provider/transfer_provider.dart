@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mug/domain/usecase/transfer_use_case.dart';
 import 'package:mug/domain/usecase/transfer_use_case_impl.dart';
 import 'package:mug/presentation/provider/screen_title_provider.dart';
+import 'package:mug/presentation/provider/setting_provider.dart';
 
 // Project imports:
 import 'package:mug/presentation/state/transfer_state.dart';
@@ -23,9 +24,51 @@ base class TransferProviderImpl extends StateNotifier<TransferState> implements 
 
   @override
   Future<void> transfer(String senderAddress, String recipientAddress, double amount) async {
-    state = TransferLoading();
+    // Get fee from settings
+    final fee = ref.read(settingProvider).feeAmount;
 
-    final result = await useCase.transfer(senderAddress, recipientAddress, amount);
+    // Show submitting state with transaction details
+    state = TransferSubmitting(
+      sendingAddress: senderAddress,
+      recipientAddress: recipientAddress,
+      amount: amount,
+      fee: fee,
+    );
+
+    final result = await useCase.transfer(senderAddress, recipientAddress, amount,
+      onOperationSubmitted: (String operationId) async {
+        state = TransferSubmitted(
+          sendingAddress: senderAddress,
+          recipientAddress: recipientAddress,
+          amount: amount,
+          fee: fee,
+          operationId: operationId,
+        );
+      },
+      onWaitingConfirmation: (String operationId) async {
+        state = TransferWaitingConfirmation(
+          sendingAddress: senderAddress,
+          recipientAddress: recipientAddress,
+          amount: amount,
+          fee: fee,
+          operationId: operationId,
+        );
+      },
+      onIncludedInBlock: (String operationId, String blockId) async {
+        state = TransferIncludedInBlock(
+          sendingAddress: senderAddress,
+          recipientAddress: recipientAddress,
+          amount: amount,
+          fee: fee,
+          operationId: operationId,
+          blockId: blockId,
+        );
+      },
+    );
+
+    // Give a moment for the last state update to render
+    await Future.delayed(const Duration(milliseconds: 100));
+
     switch (result) {
       case Success(value: final value):
         ref.read(screenTitleProvider.notifier).updateTitle("Transfer Confirmation");

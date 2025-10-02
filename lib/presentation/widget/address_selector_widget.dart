@@ -93,10 +93,15 @@ class _AddressSelectorWidgetState extends ConsumerState<AddressSelectorWidget> {
                 value: _selectedAddress,
                 items: wallets
                     .map(
-                      (wallet) => DropdownMenuItem(
-                        value: wallet.address,
-                        child: Text(shortenString(wallet.address, 26)),
-                      ),
+                      (wallet) {
+                        // Check if name is user-set (not just last 4 chars of address)
+                        final isUserSetName = wallet.name != null &&
+                                              wallet.name != wallet.address.substring(wallet.address.length - 4);
+                        return DropdownMenuItem(
+                          value: wallet.address,
+                          child: Text(isUserSetName ? wallet.name! : shortenString(wallet.address, 26)),
+                        );
+                      },
                     )
                     .toList(),
                 onChanged: (selectedAddress) {

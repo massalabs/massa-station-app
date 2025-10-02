@@ -345,8 +345,26 @@ class _DexViewState extends ConsumerState<SwapView> {
                       ),
                     ],
                   ),
-                SwapStatus.error => const Text(
-                    "Could not open the swap view, due to insufficient funds for covering gass and transaction fee! You need to have a balance of at least 10 MAS in your wallet."),
+                SwapStatus.error => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            "Could not load swap rates",
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Please check your internet connection or try again later.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               };
             },
           ),

@@ -17,9 +17,22 @@ class TransferUseCaseImpl implements TransferUseCase {
 
   @override
   Future<Result<TransferEntity, Exception>> transfer(
-      String senderAddress, String recipientAddress, double amount) async {
+    String senderAddress,
+    String recipientAddress,
+    double amount, {
+    Function(String operationId)? onOperationSubmitted,
+    Function(String operationId)? onWaitingConfirmation,
+    Function(String operationId, String blockId)? onIncludedInBlock,
+  }) async {
     try {
-      return await repository.transfer(senderAddress, recipientAddress, amount);
+      return await repository.transfer(
+        senderAddress,
+        recipientAddress,
+        amount,
+        onOperationSubmitted: onOperationSubmitted,
+        onWaitingConfirmation: onWaitingConfirmation,
+        onIncludedInBlock: onIncludedInBlock,
+      );
     } on Exception catch (error) {
       return Failure(exception: error);
     }

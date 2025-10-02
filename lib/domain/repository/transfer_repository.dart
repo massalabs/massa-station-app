@@ -3,5 +3,12 @@ import 'package:mug/domain/entity/entity.dart';
 import 'package:mug/utils/exception_handling.dart';
 
 abstract interface class TransferRepository {
-  Future<Result<TransferEntity, Exception>> transfer(String senderAddress, String recipientAddress, double amount);
+  Future<Result<TransferEntity, Exception>> transfer(
+    String senderAddress,
+    String recipientAddress,
+    double amount, {
+    Function(String operationId)? onOperationSubmitted,
+    Function(String operationId)? onWaitingConfirmation,
+    Function(String operationId, String blockId)? onIncludedInBlock,
+  });
 }

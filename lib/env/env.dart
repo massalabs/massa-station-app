@@ -14,7 +14,7 @@
 class Env {
   static const grpcHost = String.fromEnvironment(
     'grpc_host',
-    defaultValue: 'buildnet.massa.net',
+    defaultValue: 'mainnet.massa.net',
   );
   static const grpcPort = int.fromEnvironment(
     'grpc_port',

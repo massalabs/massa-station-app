@@ -6,8 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 
 // Project imports:
+import 'package:mug/presentation/provider/address_provider.dart';
 import 'package:mug/presentation/provider/dashboard_provider.dart';
+import 'package:mug/presentation/provider/transfer_provider.dart';
+import 'package:mug/presentation/provider/wallet_list_provider.dart';
+import 'package:mug/presentation/provider/wallet_provider.dart';
 import 'package:mug/presentation/provider/wallet_selection_provider.dart';
+import 'package:mug/presentation/state/transfer_state.dart';
 import 'package:mug/presentation/view/explorer/explorer_view.dart';
 import 'package:mug/presentation/view/dex/dex_view.dart';
 import 'package:mug/presentation/view/dex/swap_view.dart';
@@ -25,7 +30,7 @@ class Home extends ConsumerStatefulWidget {
 class _DashboardState extends ConsumerState<Home> {
   Widget _buildSwapView() {
     final selectedWallet = ref.watch(walletSelectionProvider);
-    
+
     if (selectedWallet == null) {
       return Center(
         child: Padding(
@@ -49,44 +54,9 @@ class _DashboardState extends ConsumerState<Home> {
         ),
       );
     }
-    
-    if (!selectedWallet.hasBalance) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Insufficient funds',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Wallet: ${selectedWallet.name ?? selectedWallet.address}',
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 4),
-              SelectableText(
-                selectedWallet.address,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  ref.read(walletSelectionProvider.notifier).clearSelection();
-                  ref.read(dashboardProvider.notifier).changeIndexBottom(index: 0);
-                },
-                child: const Text('Change Wallet'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    
+
     // Skip DexView and go directly to swap with selected wallet
+    // Allow even with insufficient balance - will be caught later
     return SwapView(selectedWallet.address);
   }
 
@@ -164,6 +134,35 @@ class _DashboardState extends ConsumerState<Home> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(dashboardProvider);
+
+    // Listen for transfer completion and show global snackbar
+    ref.listen(transferProvider, (previous, next) {
+      if (next is TransferSuccess) {
+        // Refresh wallet balance and wallet list
+        final senderAddress = next.transferEntity.sendingAddress;
+        if (senderAddress != null) {
+          ref.read(walletProvider.notifier).getWalletInformation(senderAddress, true);
+        }
+        ref.read(walletListProvider.notifier).loadWallets();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Transfer of ${next.transferEntity.amount} MAS successful!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else if (next is TransferFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Transfer failed: ${next.message}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: _buildAppBarTitle(),

@@ -45,6 +45,11 @@ class _TransferViewState extends ConsumerState<TransferView> {
     // Listen for changes to update warning visibility
     amountController.addListener(_updateWarningVisibility);
     addressController.addListener(_updateWarningVisibility);
+
+    // Reset transfer state when opening the screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(transferProvider.notifier).resetState();
+    });
   }
 
   @override
@@ -68,6 +73,7 @@ class _TransferViewState extends ConsumerState<TransferView> {
     final transactionFee = ref.watch(settingProvider).feeAmount;
 
     final screenTitle = ref.watch(screenTitleProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Image.asset(
@@ -273,6 +279,164 @@ class _TransferViewState extends ConsumerState<TransferView> {
                       ],
                     ),
                   TransferLoading() => const CircularProgressIndicator(),
+                  TransferSubmitting(
+                    sendingAddress: final sendingAddress,
+                    recipientAddress: final recipientAddress,
+                    amount: final amount,
+                    fee: final fee,
+                  ) =>
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 20),
+                        const Text("Submitting transfer...", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 20),
+                        Card(
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("From: ${shortenString(sendingAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("To: ${shortenString(recipientAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("Amount: $amount MAS"),
+                                const SizedBox(height: 8),
+                                Text("Fee: $fee MAS"),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  TransferSubmitted(
+                    sendingAddress: final sendingAddress,
+                    recipientAddress: final recipientAddress,
+                    amount: final amount,
+                    fee: final fee,
+                    operationId: final operationId,
+                  ) =>
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 20),
+                        const Text("Transfer submitted!", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 20),
+                        Card(
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("From: ${shortenString(sendingAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("To: ${shortenString(recipientAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("Amount: $amount MAS"),
+                                const SizedBox(height: 8),
+                                Text("Fee: $fee MAS"),
+                                const SizedBox(height: 8),
+                                const Divider(),
+                                const SizedBox(height: 8),
+                                Text("Operation ID: ${shortenString(operationId, 26)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  TransferWaitingConfirmation(
+                    sendingAddress: final sendingAddress,
+                    recipientAddress: final recipientAddress,
+                    amount: final amount,
+                    fee: final fee,
+                    operationId: final operationId,
+                  ) =>
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 20),
+                        const Text("Waiting for inclusion in block", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 20),
+                        Card(
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("From: ${shortenString(sendingAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("To: ${shortenString(recipientAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("Amount: $amount MAS"),
+                                const SizedBox(height: 8),
+                                Text("Fee: $fee MAS"),
+                                const SizedBox(height: 8),
+                                const Divider(),
+                                const SizedBox(height: 8),
+                                Text("Operation ID: ${shortenString(operationId, 26)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                const Text("⏳ Waiting for transaction to be included in a block...", style: TextStyle(fontStyle: FontStyle.italic)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  TransferIncludedInBlock(
+                    sendingAddress: final sendingAddress,
+                    recipientAddress: final recipientAddress,
+                    amount: final amount,
+                    fee: final fee,
+                    operationId: final operationId,
+                    blockId: final blockId,
+                  ) =>
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 20),
+                        const Text("Waiting for finalization", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 20),
+                        Card(
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("From: ${shortenString(sendingAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("To: ${shortenString(recipientAddress, 26)}"),
+                                const SizedBox(height: 8),
+                                Text("Amount: $amount MAS"),
+                                const SizedBox(height: 8),
+                                Text("Fee: $fee MAS"),
+                                const SizedBox(height: 8),
+                                const Divider(),
+                                const SizedBox(height: 8),
+                                Text("Operation ID: ${shortenString(operationId, 26)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                Text("Block ID: ${shortenString(blockId, 26)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                const Text("✅ Transaction included in block, waiting for finalization...", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.green)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   TransferSuccess(transferEntity: final transfersEntity) => Column(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
@@ -280,7 +444,7 @@ class _TransferViewState extends ConsumerState<TransferView> {
                         const SuccessInformationWidget(message: "Fund transfered successfully!"),
                         const SizedBox(height: 20),
                         CustomLabelWidget(
-                            label: "Sending Address",
+                            label: "From",
                             value: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                               Text(shortenString(transfersEntity.sendingAddress!, 26),
                                   style: const TextStyle(fontSize: 20)),
@@ -294,7 +458,7 @@ class _TransferViewState extends ConsumerState<TransferView> {
                             ])),
                         const SizedBox(height: 10),
                         CustomLabelWidget(
-                            label: "Receipient Address",
+                            label: "To",
                             value: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                               Text(shortenString(transfersEntity.recipientAddress!, 26),
                                   style: const TextStyle(fontSize: 20)),
@@ -308,7 +472,7 @@ class _TransferViewState extends ConsumerState<TransferView> {
                             ])),
                         const SizedBox(height: 10),
                         CustomLabelWidget(
-                          label: "Amount Transfered",
+                          label: "Amount",
                           value: Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -330,7 +494,7 @@ class _TransferViewState extends ConsumerState<TransferView> {
                         ),
                         const SizedBox(height: 10),
                         CustomLabelWidget(
-                          label: "Transaction Fee ",
+                          label: "Fee",
                           value: Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -372,6 +536,8 @@ class _TransferViewState extends ConsumerState<TransferView> {
                         FilledButton.tonalIcon(
                           onPressed: () async {
                             ref.read(transferProvider.notifier).resetState();
+                            // Refresh wallet data when returning
+                            ref.read(addressProvider.notifier).getAddress(widget.addressEntity.address, false);
                             Navigator.pop(context);
                           },
                           icon: const Icon(Icons.close),
