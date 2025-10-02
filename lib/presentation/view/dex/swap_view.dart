@@ -1,5 +1,6 @@
 // Flutter imports:
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -94,8 +95,10 @@ class _DexViewState extends ConsumerState<SwapView> with AutomaticKeepAliveClien
   Widget build(BuildContext context) {
     super.build(context);
 
-    final buildTime = DateTime.now();
-    print('🟢 SwapView build at: ${buildTime.millisecondsSinceEpoch}');
+    if (kDebugMode) {
+      final buildTime = DateTime.now();
+      print('🟢 SwapView build at: ${buildTime.millisecondsSinceEpoch}');
+    }
 
     // Listen to tab changes and start/stop timer
     final currentTab = ref.watch(dashboardProvider);

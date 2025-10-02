@@ -1,5 +1,6 @@
 // Flutter imports:
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -50,9 +51,10 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
   @override
   void initState() {
     super.initState();
-    final initTime = DateTime.now();
-    print('🟢 WalletView initState for ${widget.arg.name ?? widget.arg.address} at: ${initTime.millisecondsSinceEpoch}');
-    // Trigger wallet information loading
+    if (kDebugMode) {
+      final initTime = DateTime.now();
+      print('🟢 WalletView initState for ${widget.arg.name ?? widget.arg.address} at: ${initTime.millisecondsSinceEpoch}');
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _fetch();
     });
@@ -62,7 +64,9 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
     final now = DateTime.now();
     final key = widget.arg.address;
     _lastFetchMap[key] = now;
-    print('💰 WalletView fetching data for $key');
+    if (kDebugMode) {
+      print('💰 WalletView fetching data for $key');
+    }
     ref.read(walletProvider.notifier).getWalletInformation(widget.arg.address, widget.arg.hasBalance);
     ref.read(walletNameProvider.notifier).loadWalletName(widget.arg.address);
   }
@@ -72,7 +76,9 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
     super.didUpdateWidget(oldWidget);
     // If the wallet address changed, reload the wallet data
     if (oldWidget.arg.address != widget.arg.address) {
-      print('🔄 WalletView address changed from ${oldWidget.arg.address} to ${widget.arg.address}');
+      if (kDebugMode) {
+        print('🔄 WalletView address changed from ${oldWidget.arg.address} to ${widget.arg.address}');
+      }
       _fetch();
     }
   }
@@ -130,8 +136,10 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
 
     // Use the name from the argument immediately to avoid flickering
     final walletName = widget.arg.name ?? shortenString(widget.arg.address, 4);
-    final buildTime = DateTime.now();
-    print('🟡 WalletView build for $walletName at: ${buildTime.millisecondsSinceEpoch}');
+    if (kDebugMode) {
+      final buildTime = DateTime.now();
+      print('🟡 WalletView build for $walletName at: ${buildTime.millisecondsSinceEpoch}');
+    }
 
     return Scaffold(
       body: CommonPadding(
@@ -684,21 +692,29 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
   }
 
   Future<void> _removeWallet(String address) async {
-    print('Starting wallet removal for: $address');
+    if (kDebugMode) {
+      print('Starting wallet removal for: $address');
+    }
 
     // Get all wallets
     final walletString = await ref.read(localStorageServiceProvider).getStoredWallets();
     if (walletString.isEmpty) {
-      print('No wallets found');
+      if (kDebugMode) {
+        print('No wallets found');
+      }
       return;
     }
 
     final wallets = WalletModel.decode(walletString);
-    print('Current wallet count: ${wallets.length}');
+    if (kDebugMode) {
+      print('Current wallet count: ${wallets.length}');
+    }
 
     // Check if this is the only wallet
     if (wallets.length == 1) {
-      print('Cannot remove last wallet');
+      if (kDebugMode) {
+        print('Cannot remove last wallet');
+      }
       if (mounted) {
         informationSnackBarMessage(context, "Cannot remove the last wallet!");
       }
@@ -707,29 +723,41 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
 
     // Remove the wallet
     wallets.removeWhere((wallet) => wallet.address == address);
-    print('Wallets after removal: ${wallets.length}');
+    if (kDebugMode) {
+      print('Wallets after removal: ${wallets.length}');
+    }
     await ref.read(localStorageServiceProvider).storeWallets(WalletModel.encode(wallets));
 
     // Check if this was the default wallet
     final defaultWallet = await ref.read(localStorageServiceProvider).getDefaultWallet();
-    print('Default wallet: $defaultWallet');
+    if (kDebugMode) {
+      print('Default wallet: $defaultWallet');
+    }
     if (defaultWallet == address) {
-      print('Removed wallet was default, setting new default: ${wallets.first.address}');
+      if (kDebugMode) {
+        print('Removed wallet was default, setting new default: ${wallets.first.address}');
+      }
       await ref.read(localStorageServiceProvider).setDefaultWallet(wallets.first.address);
       ref.invalidate(accountProvider);
       ref.invalidate(smartContractServiceProvider);
     }
 
     if (mounted) {
-      print('Clearing wallet selection to go back to list');
+      if (kDebugMode) {
+        print('Clearing wallet selection to go back to list');
+      }
       // Clear the wallet selection to return to wallet list
       ref.read(walletSelectionProvider.notifier).clearSelection();
 
       // Reload wallet list
-      print('Reloading wallet list');
+      if (kDebugMode) {
+        print('Reloading wallet list');
+      }
       await ref.read(walletListProvider.notifier).loadWallets();
 
-      print('Showing success message');
+      if (kDebugMode) {
+        print('Showing success message');
+      }
       informationSnackBarMessage(context, "Wallet removed successfully!");
     }
   }

@@ -1,4 +1,5 @@
 // Flutter imports:
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 // Package imports:
@@ -74,8 +75,10 @@ class _DashboardState extends ConsumerState<Home> {
   Widget _buildBody() {
     final selectedWallet = ref.watch(walletSelectionProvider);
     final state = ref.watch(dashboardProvider);
-    final buildBodyTime = DateTime.now();
-    print('🟡 _buildBody called for tab $state at: ${buildBodyTime.millisecondsSinceEpoch}');
+    if (kDebugMode) {
+      final buildBodyTime = DateTime.now();
+      print('🟡 _buildBody called for tab $state at: ${buildBodyTime.millisecondsSinceEpoch}');
+    }
 
     if (_showSettings) {
       return const SettingView();

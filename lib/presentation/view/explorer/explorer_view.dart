@@ -1,5 +1,6 @@
 // Flutter imports:
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 // Package imports:
@@ -47,7 +48,9 @@ class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepA
   void _fetch() {
     final now = DateTime.now();
     _lastFetch = now;
-    print('🔍 ExplorerView fetching stakers data');
+    if (kDebugMode) {
+      print('🔍 ExplorerView fetching stakers data');
+    }
     ref.read(stakerProvider.notifier).getStakers(0);
   }
 
