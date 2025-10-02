@@ -54,8 +54,17 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
     print('🟢 WalletView initState for ${widget.arg.name ?? widget.arg.address} at: ${initTime.millisecondsSinceEpoch}');
     // Trigger wallet information loading
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      _fetchIfNeeded();
+      _fetch();
     });
+  }
+
+  void _fetch() {
+    final now = DateTime.now();
+    final key = widget.arg.address;
+    _lastFetchMap[key] = now;
+    print('💰 WalletView fetching data for $key');
+    ref.read(walletProvider.notifier).getWalletInformation(widget.arg.address, widget.arg.hasBalance);
+    ref.read(walletNameProvider.notifier).loadWalletName(widget.arg.address);
   }
 
   @override
@@ -64,7 +73,7 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
     // If the wallet address changed, reload the wallet data
     if (oldWidget.arg.address != widget.arg.address) {
       print('🔄 WalletView address changed from ${oldWidget.arg.address} to ${widget.arg.address}');
-      _fetchIfNeeded();
+      _fetch();
     }
   }
 
@@ -77,7 +86,7 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
   void _startRefreshTimer() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      _fetchIfNeeded();
+      _fetch();
     });
   }
 
@@ -86,22 +95,6 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
     _refreshTimer = null;
   }
 
-  void _fetchIfNeeded() {
-    if (!mounted) return;
-
-    final now = DateTime.now();
-    final key = widget.arg.address;
-    final lastFetch = _lastFetchMap[key];
-
-    if (lastFetch == null || now.difference(lastFetch).inSeconds >= 10) {
-      _lastFetchMap[key] = now;
-      print('💰 WalletView fetching data for $key');
-      ref.read(walletProvider.notifier).getWalletInformation(widget.arg.address, widget.arg.hasBalance);
-      ref.read(walletNameProvider.notifier).loadWalletName(widget.arg.address);
-    } else {
-      print('⏭️ WalletView skipping fetch (last fetch ${now.difference(lastFetch).inSeconds}s ago)');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +112,16 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
       if (_refreshTimer == null || !_refreshTimer!.isActive) {
         _startRefreshTimer();
       }
+      // Fetch when becoming visible (rate-limited by timestamp)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final now = DateTime.now();
+        final key = widget.arg.address;
+        final lastFetch = _lastFetchMap[key];
+
+        if (lastFetch == null || now.difference(lastFetch).inSeconds >= 10) {
+          _fetch();
+        }
+      });
     } else {
       if (_refreshTimer != null && _refreshTimer!.isActive) {
         _stopRefreshTimer();

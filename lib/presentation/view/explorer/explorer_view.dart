@@ -26,6 +26,7 @@ class ExplorerView extends ConsumerStatefulWidget {
 class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepAliveClientMixin {
   static DateTime? _lastFetch;
   Timer? _refreshTimer;
+  bool _hasInitialFetch = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -33,9 +34,21 @@ class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepA
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((duration) {
-      _fetchIfNeeded();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Only fetch on init if we're on the explorer tab
+      final currentTab = ref.read(dashboardProvider);
+      if (currentTab == 2) {
+        _fetch();
+        _hasInitialFetch = true;
+      }
     });
+  }
+
+  void _fetch() {
+    final now = DateTime.now();
+    _lastFetch = now;
+    print('🔍 ExplorerView fetching stakers data');
+    ref.read(stakerProvider.notifier).getStakers(0);
   }
 
   @override
@@ -47,7 +60,7 @@ class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepA
   void _startRefreshTimer() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      _fetchIfNeeded();
+      _fetch();
     });
   }
 
@@ -56,20 +69,6 @@ class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepA
     _refreshTimer = null;
   }
 
-  void _fetchIfNeeded() {
-    if (!mounted) return;
-
-    final now = DateTime.now();
-    final lastFetch = _lastFetch;
-
-    if (lastFetch == null || now.difference(lastFetch) > const Duration(seconds: 10)) {
-      _lastFetch = now;
-      print('🔍 ExplorerView fetching stakers data');
-      ref.read(stakerProvider.notifier).getStakers(0);
-    } else {
-      print('⏭️ ExplorerView skipping fetch (last fetch ${now.difference(lastFetch).inSeconds}s ago)');
-    }
-  }
 
   final TextEditingController _searchText = TextEditingController();
 
@@ -86,6 +85,23 @@ class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepA
       if (_refreshTimer == null || !_refreshTimer!.isActive) {
         _startRefreshTimer();
       }
+      // Fetch when becoming visible
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // If no initial fetch yet, fetch immediately
+        if (!_hasInitialFetch) {
+          _fetch();
+          _hasInitialFetch = true;
+          return;
+        }
+
+        // Otherwise rate-limit by timestamp
+        final now = DateTime.now();
+        final lastFetch = _lastFetch;
+
+        if (lastFetch == null || now.difference(lastFetch).inSeconds >= 10) {
+          _fetch();
+        }
+      });
     } else {
       if (_refreshTimer != null && _refreshTimer!.isActive) {
         _stopRefreshTimer();
@@ -100,145 +116,163 @@ class _ExplorerViewState extends ConsumerState<ExplorerView> with AutomaticKeepA
           },
           child: Consumer(
             builder: (context, ref, child) {
-              return switch (ref.watch(stakerProvider)) {
-                StakerInitial() => const Text('No stakers.'),
-                StakerLoading() => const CircularProgressIndicator(),
-                StakersSuccess(stakers: final stakers) => Column(
+              final stakerState = ref.watch(stakerProvider);
+
+              return Column(
+                children: [
+                  // Always show stats cards (with placeholder or real data)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Card(
-                              child: ListTile(
-                                title: Text(
-                                  formatNumber(stakers.stakerNumbers.toDouble()),
-                                  textAlign: TextAlign.center,
-                                ),
-                                subtitle: const Text("Stakers", textAlign: TextAlign.center),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Card(
-                              child: ListTile(
-                                title: Text(formatNumber(stakers.totalRolls.toDouble()), textAlign: TextAlign.center),
-                                subtitle: const Text("Rolls", textAlign: TextAlign.center),
-                              ),
-                            ),
-                          )
-                        ],
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Card(
-                              child: TextField(
-                                controller: _searchText,
-                                onChanged: (value) {
-                                  ref.read(stakerProvider.notifier).filterStakers(value);
-                                },
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  hintText: 'Search address/block/operation/mns...',
-                                  prefixIcon: Icon(Icons.search),
-                                ),
-                                style: TextStyle(fontSize: Constants.fontSizeExtraSmall),
-                                textAlignVertical: TextAlignVertical.center,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (stakers.stakers.isEmpty)
-                        ButtonWidget(
-                          isDarkTheme: true,
-                          text: "Search",
-                          onClicked: () async {
-                            final searchType = ref.read(searchProvider.notifier).getSearchType(_searchText.text);
-                            switch (searchType) {
-                              case SearchType.address:
-                                await Navigator.pushNamed(
-                                  context,
-                                  ExploreRoutes.address,
-                                  arguments: _searchText.text,
-                                );
-                              case SearchType.block:
-                                await Navigator.pushNamed(
-                                  context,
-                                  ExploreRoutes.block,
-                                  arguments: _searchText.text,
-                                );
-                              case SearchType.operation:
-                                await Navigator.pushNamed(
-                                  context,
-                                  ExploreRoutes.operation,
-                                  arguments: _searchText.text,
-                                );
-                              case SearchType.mns:
-                                await Navigator.pushNamed(
-                                  context,
-                                  ExploreRoutes.domain,
-                                  arguments: DomainArguments(domainName: _searchText.text, isNewDomain: false),
-                                );
-                              case SearchType.unknown:
-                                await Navigator.pushNamed(
-                                  context,
-                                  ExploreRoutes.notFound,
-                                  arguments: _searchText.text,
-                                );
-                            }
-                          },
-                        ),
                       Expanded(
-                        child: ListView.builder(
-                          itemCount: stakers.stakers.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            final staker = stakers.stakers[index];
-                            return GestureDetector(
-                              onTap: () async {
-                                await Navigator.pushNamed(
-                                  context,
-                                  ExploreRoutes.address,
-                                  arguments: staker.address,
-                                );
-                              },
-                              child: Card(
-                                child: ListTile(
-                                  leading: Text(staker.rank.toString(), style: TextStyle(fontSize: Constants.fontSize)),
-                                  title: Text(
-                                    shortenString(staker.address, Constants.shortedAddressLength),
-                                  ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text("Ownership: ${formatNumber4(staker.ownershipPercentage)} %"),
-                                      Text("Est. Daily Reward: ${formatNumber2(staker.estimatedDailyReward)} MAS"),
-                                    ],
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(formatNumber(staker.rolls.toDouble()),
-                                          style: TextStyle(fontSize: Constants.fontSize)),
-                                      const Text("rolls"),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
+                        child: Card(
+                          child: ListTile(
+                            title: Text(
+                              stakerState is StakersSuccess
+                                  ? formatNumber(stakerState.stakers.stakerNumbers.toDouble())
+                                  : "...",
+                              textAlign: TextAlign.center,
+                            ),
+                            subtitle: const Text("Stakers", textAlign: TextAlign.center),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Card(
+                          child: ListTile(
+                            title: Text(
+                              stakerState is StakersSuccess
+                                  ? formatNumber(stakerState.stakers.totalRolls.toDouble())
+                                  : "...",
+                              textAlign: TextAlign.center,
+                            ),
+                            subtitle: const Text("Rolls", textAlign: TextAlign.center),
+                          ),
+                        ),
+                      )
+                    ],
+                  ),
+                  // Always show search bar
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Card(
+                          child: TextField(
+                            controller: _searchText,
+                            onChanged: (value) {
+                              if (stakerState is StakersSuccess) {
+                                ref.read(stakerProvider.notifier).filterStakers(value);
+                              }
+                            },
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              hintText: 'Search address/block/operation/mns...',
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            style: TextStyle(fontSize: Constants.fontSizeExtraSmall),
+                            textAlignVertical: TextAlignVertical.center,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                StakerFailure(message: final message) => Text(message),
-              };
+                  // Content based on state
+                  Expanded(
+                    child: _buildContent(stakerState),
+                  ),
+                ],
+              );
             },
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildContent(StakerState state) {
+    return switch (state) {
+      StakerInitial() => const Center(child: Text('Loading...')),
+      StakerLoading() => const Center(child: CircularProgressIndicator()),
+      StakersSuccess(stakers: final stakers) => stakers.stakers.isEmpty
+          ? ButtonWidget(
+              isDarkTheme: true,
+              text: "Search",
+              onClicked: () async {
+                final searchType = ref.read(searchProvider.notifier).getSearchType(_searchText.text);
+                switch (searchType) {
+                  case SearchType.address:
+                    await Navigator.pushNamed(
+                      context,
+                      ExploreRoutes.address,
+                      arguments: _searchText.text,
+                    );
+                  case SearchType.block:
+                    await Navigator.pushNamed(
+                      context,
+                      ExploreRoutes.block,
+                      arguments: _searchText.text,
+                    );
+                  case SearchType.operation:
+                    await Navigator.pushNamed(
+                      context,
+                      ExploreRoutes.operation,
+                      arguments: _searchText.text,
+                    );
+                  case SearchType.mns:
+                    await Navigator.pushNamed(
+                      context,
+                      ExploreRoutes.domain,
+                      arguments: DomainArguments(domainName: _searchText.text, isNewDomain: false),
+                    );
+                  case SearchType.unknown:
+                    await Navigator.pushNamed(
+                      context,
+                      ExploreRoutes.notFound,
+                      arguments: _searchText.text,
+                    );
+                }
+              },
+            )
+          : ListView.builder(
+              itemCount: stakers.stakers.length,
+              itemBuilder: (BuildContext context, int index) {
+                final staker = stakers.stakers[index];
+                return GestureDetector(
+                  onTap: () async {
+                    await Navigator.pushNamed(
+                      context,
+                      ExploreRoutes.address,
+                      arguments: staker.address,
+                    );
+                  },
+                  child: Card(
+                    child: ListTile(
+                      leading: Text(staker.rank.toString(), style: TextStyle(fontSize: Constants.fontSize)),
+                      title: Text(
+                        shortenString(staker.address, Constants.shortedAddressLength),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Ownership: ${formatNumber4(staker.ownershipPercentage)} %"),
+                          Text("Est. Daily Reward: ${formatNumber2(staker.estimatedDailyReward)} MAS"),
+                        ],
+                      ),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(formatNumber(staker.rolls.toDouble()),
+                              style: TextStyle(fontSize: Constants.fontSize)),
+                          const Text("rolls"),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+      StakerFailure(message: final message) => Center(child: Text(message)),
+    };
   }
 }
