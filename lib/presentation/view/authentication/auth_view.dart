@@ -17,22 +17,43 @@ class AuthView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pass = ref.read(localStorageServiceProvider).passphrase;
-    return FutureBuilder(
-        future: pass,
+    // Check if passphrase verification is set up by checking for verification hash
+    final verificationCheck = ref.read(localStorageServiceProvider).getSecureString('passphrase_verify_hash');
+    return FutureBuilder<String?>(
+        future: verificationCheck,
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            if (snapshot.data!.isNotEmpty) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          if (snapshot.hasError) {
+            // On error, assume first time setup
+            return SetPassphraseView(
+              isKeyboardFocused: isKeyboardFocused,
+            );
+          }
+
+          // Check the actual data value (null or empty = not set up yet)
+          if (snapshot.connectionState == ConnectionState.done) {
+            final verificationSalt = snapshot.data;
+            if (verificationSalt != null && verificationSalt.isNotEmpty) {
+              // Passphrase already set up, show login
               return LoginView(
                 isKeyboardFocused: isKeyboardFocused,
               );
             } else {
+              // First time setup, show passphrase creation
               return SetPassphraseView(
                 isKeyboardFocused: isKeyboardFocused,
               );
             }
           }
-          return const CircularProgressIndicator();
+
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         });
   }
 }

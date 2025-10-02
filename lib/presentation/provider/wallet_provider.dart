@@ -161,6 +161,10 @@ class WalletNameNotifier extends StateNotifier<String> {
 
   Future<void> loadWalletName(String address) async {
     final walletString = await localStorageService.getStoredWallets();
+    if (walletString.isEmpty) {
+      state = address.substring(address.length - 4);
+      return;
+    }
     final wallets = WalletModel.decode(walletString);
     for (int i = 0; i < wallets.length; i++) {
       if (wallets[i].address == address) {

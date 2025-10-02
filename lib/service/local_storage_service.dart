@@ -1,10 +1,14 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mug/data/model/wallet_model.dart';
-import 'package:mug/utils/encryption/aes_encryption.dart';
+import 'package:mug/service/session_manager.dart';
+import 'package:mug/utils/encryption/pbkdf2_encryption.dart';
+import 'package:pointycastle/export.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StorageKeys {
@@ -45,18 +49,59 @@ class LocalStorageService {
 
   bool get isFlagSecure => sharedPreferences.getBool(StorageKeys.isFlagSecure) ?? true;
 
-  Future<String> get passphrase async => await getSecureString(StorageKeys.passphraseHash) ?? '';
+  /// Set passphrase verification (one-time setup)
+  /// Stores master key salt and verification hash, then caches master key in RAM
+  Future<void> setPassphraseVerification(String passphrase) async {
+    // Generate master key salt (stored, used to derive master key from passphrase)
+    final masterSalt = generateRandomNonZero(32);
+    await setSecureString('master_key_salt', base64.encode(masterSalt));
 
-  Future<void> setPassphrase(String passphrase) async {
-    final passphraseHash = sha256.convert(utf8.encode(passphrase)).toString();
-    await setSecureString(StorageKeys.passphraseHash, passphraseHash);
+    // Derive master key (runs in isolate - won't block UI)
+    final masterKey = await deriveMasterKeyFromPassphrase(passphrase, masterSalt);
+
+    // Hash the master key for verification (fast - just SHA-256)
+    final verifyHash = sha256.convert(masterKey).bytes;
+    await setSecureString('passphrase_verify_hash', base64.encode(verifyHash));
+
+    // Cache master key in RAM for immediate use
+    SessionManager().setMasterKey(masterKey, timeout: Duration(seconds: inactivityTimeout));
   }
 
-  Future<bool> verifyPassphrase(String passphrase) async {
-    final passphraseHash1 = sha256.convert(utf8.encode(passphrase)).toString();
-    final passphraseHash2 = await getSecureString(StorageKeys.passphraseHash) ?? '';
-    if (passphraseHash1 == passphraseHash2) return true;
-    return false;
+  /// Verify passphrase and cache master key in RAM
+  /// Returns true if passphrase is correct and master key is cached
+  Future<bool> verifyAndCacheMasterKey(String passphrase) async {
+    // Get stored verification hash
+    final hashB64 = await getSecureString('passphrase_verify_hash');
+    final masterSaltB64 = await getSecureString('master_key_salt');
+
+    if (hashB64 == null || masterSaltB64 == null) return false;
+
+    final storedHash = base64.decode(hashB64);
+    final masterSalt = base64.decode(masterSaltB64);
+
+    // Derive master key from passphrase (runs in isolate - won't block UI)
+    final masterKey = await deriveMasterKeyFromPassphrase(passphrase, masterSalt);
+
+    // Verify by comparing hash of derived master key
+    final computedHash = sha256.convert(masterKey).bytes;
+    if (!_constantTimeEquals(storedHash, Uint8List.fromList(computedHash))) {
+      return false;
+    }
+
+    // Passphrase correct - cache master key in RAM
+    SessionManager().setMasterKey(masterKey, timeout: Duration(seconds: inactivityTimeout));
+
+    return true;
+  }
+
+  /// Constant-time comparison to prevent timing attacks
+  bool _constantTimeEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    int result = 0;
+    for (int i = 0; i < a.length; i++) {
+      result |= a[i] ^ b[i];
+    }
+    return result == 0;
   }
 
   void setLoginStatus(bool status) => _isUserActive = status;
@@ -93,11 +138,11 @@ class LocalStorageService {
       await sharedPreferences.setBool(StorageKeys.isInactivityTimeoutOn, flag);
 
   int get inactivityTimeout {
-    //default: 4 minutes
+    //default: 5 minutes
     List<int> choices = [30, 60, 120, 180, 300, 600, 900];
     var index = sharedPreferences.getInt(StorageKeys.inactivityTimeout);
     if (!(index != null && index >= 0 && index < choices.length)) {
-      index = 4; // default
+      index = 4; // default (300 seconds = 5 minutes)
     }
     return choices[index];
   }
@@ -127,6 +172,8 @@ class LocalStorageService {
 
   /// Clears all app data - use when user forgets passphrase
   Future<void> clearAllData() async {
+    // Clear session first
+    SessionManager().endSession();
     await sharedPreferences.clear();
     await _secureStorage.deleteAll();
     _isUserActive = false;
@@ -171,24 +218,24 @@ class LocalStorageService {
     return await getSecureString(StorageKeys.wallets) ?? "";
   }
 
+  /// Get wallet private key (decrypt on-demand using cached master key)
   Future<String?> getWalletKey(String address) async {
-    List<WalletModel> wallets;
+    final masterKey = SessionManager().masterKey;
+    if (masterKey == null) {
+      throw Exception('Session expired - please login again');
+    }
+
     final walletString = await getStoredWallets();
-    String encryptedKey = "";
-    if (walletString.isNotEmpty) {
-      wallets = WalletModel.decode(walletString);
-      for (var wallet in wallets) {
-        if (wallet.address == address) {
-          encryptedKey = wallet.encryptedKey;
-          break;
-        }
-      }
-      if (encryptedKey.isNotEmpty) {
-        final passphrase = await this.passphrase;
-        return decryptAES(encryptedKey, passphrase);
+    if (walletString.isEmpty) return null;
+
+    final wallets = WalletModel.decode(walletString);
+    for (var wallet in wallets) {
+      if (wallet.address == address) {
+        // Decrypt using cached master key (fast!)
+        return decryptWithMasterKey(wallet.encryptedKey, masterKey);
       }
     }
-    return encryptedKey;
+    return null;
   }
 
   Future<void> setDefaultWallet(String address) async {

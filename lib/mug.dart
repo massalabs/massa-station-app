@@ -14,6 +14,7 @@ import 'package:mug/presentation/provider/local_session_timeout_provider.dart';
 import 'package:mug/routes/routes.dart';
 import 'package:mug/service/local_storage_service.dart';
 import 'package:mug/service/provider.dart';
+import 'package:mug/service/session_manager.dart';
 import 'package:mug/presentation/widget/generic.dart';
 import 'package:mug/presentation/widget/logout_alert.dart';
 
@@ -92,6 +93,12 @@ class _MugState extends ConsumerState<Mug> {
   Future<void> logout({
     required bool showLogoutMsg,
   }) async {
+    // Clear master key from RAM
+    SessionManager().endSession();
+
+    // Clear login status
+    _storage.setLoginStatus(false);
+
     _navigator?.pushNamedAndRemoveUntil(
       AuthRoutes.authWall,
       (Route<dynamic> route) => false,

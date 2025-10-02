@@ -230,12 +230,12 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   }
 
   Future<void> validatePassword(String passphrase) async {
-    final pass = await ref.read(localStorageServiceProvider).verifyPassphrase(passphrase);
-    if (pass) {
-      setState(() {
-        isPasswordValid = pass;
-      });
-    }
+    // Use verifyAndCacheMasterKey but don't cache yet (just for validation)
+    // Actually we can't use it here as it caches. Let's create a simpler verify method
+    // For now, just verify format - actual verification happens in _login
+    setState(() {
+      isPasswordValid = passphrase.length >= 8;
+    });
   }
 
   InputDecoration _inputFieldDecoration(double inputBoxEdgeRadious) {
@@ -327,10 +327,55 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   }
 
   Future<void> _login(String passphrase) async {
-    const verifyPassphrase = 'Verifying your passphrase!';
     const snackMsgWrongEncryptionPhrase = 'Wrong passphrase!';
-    if (await ref.read(localStorageServiceProvider).verifyPassphrase(passphrase)) {
-      informationSnackBarMessage(context, verifyPassphrase);
+
+    // Close keyboard
+    FocusScope.of(context).unfocus();
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return WillPopScope(
+          onWillPop: () async => false,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 20),
+                  Text(
+                    'Verifying passphrase...',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    // Verify passphrase AND cache master key in one operation
+    final isValid = await ref.read(localStorageServiceProvider).verifyAndCacheMasterKey(passphrase);
+
+    // Close loading dialog
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    if (isValid) {
+      // Clear passphrase from memory immediately
+      passPhraseController.clear();
 
       // re-enable biometric auth
       if (forcePassphraseInput) ref.read(localStorageServiceProvider).incrementBiometricAttemptAllTimeCount();
@@ -445,7 +490,11 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
       } catch (e) {
         //print(e);
       }
-      if (authenticated) await _login(await ref.read(localStorageServiceProvider).passphrase);
+      // Biometric auth no longer retrieves passphrase - needs to be disabled for now
+      // TODO: Implement biometric auth with secure enclave storage
+      if (authenticated) {
+        informationSnackBarMessage(context, 'Biometric auth needs reconfiguration after security upgrade');
+      }
     }
     setState(() {
       forcePassphraseInput = ref.read(localStorageServiceProvider).biometricAttemptAllTimeCount % 5 == 0;

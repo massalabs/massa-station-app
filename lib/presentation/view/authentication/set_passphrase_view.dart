@@ -286,16 +286,63 @@ class _SetPassphraseViewState extends ConsumerState<SetPassphraseView> {
       final enteredPassphraseConfirm = _passPhraseControllerConfirm.text;
 
       if (enteredPassphrase == enteredPassphraseConfirm) {
-        informationSnackBarMessage(context, 'Passphrase set!');
+        // Close keyboard
+        FocusScope.of(context).unfocus();
 
-        await ref.read(localStorageServiceProvider).setPassphrase(enteredPassphrase);
-        // Auto-login after setting passphrase instead of going to login screen
-        ref.read(localStorageServiceProvider).setLoginStatus(true);
-        TextInput.finishAutofillContext();
-        await Navigator.pushReplacementNamed(
-          context,
-          AuthRoutes.home,
+        // Show loading dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return WillPopScope(
+              onWillPop: () async => false,
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[900],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 20),
+                      Text(
+                        'Initializing secure storage...',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
+
+        // Set passphrase verification and cache master key in RAM
+        await ref.read(localStorageServiceProvider).setPassphraseVerification(enteredPassphrase);
+
+        // Clear passphrase from memory
+        _passPhraseController.clear();
+        _passPhraseControllerConfirm.clear();
+
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        // Auto-login after setting passphrase instead of going to login screen
+        if (mounted) {
+          ref.read(localStorageServiceProvider).setLoginStatus(true);
+          TextInput.finishAutofillContext();
+          await Navigator.pushReplacementNamed(
+            context,
+            AuthRoutes.home,
+          );
+        }
       } else {
         informationSnackBarMessage(context, 'Passphrase mismatch!');
       }

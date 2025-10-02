@@ -15,6 +15,134 @@ Massa Station will initally have the following features:
 ### Massa Explore
 - Massa explorer - with ability to list all massa addresses, search for an address, and view address details.
 
+## Security & Cryptography
+
+Massa Station App implements multiple layers of cryptographic security to protect user funds and private keys.
+
+### Cryptographic Algorithms
+
+#### Blockchain Operations (via massa package)
+- **Ed25519 (EdDSA)**: Used for all blockchain signing operations
+  - Public/private key pair generation for Massa accounts
+  - Transaction signing
+  - Message signing
+
+#### Local Storage Encryption
+- **PBKDF2-HMAC-SHA256**: Key derivation from user passphrase
+  - 100,000 iterations (configurable)
+  - 32-byte output (256-bit master key)
+  - Per-user random salt (32 bytes)
+  - Executed in background isolate to avoid UI blocking
+
+- **AES-256-CBC**: Symmetric encryption for wallet private keys
+  - 256-bit encryption key derived from master key
+  - 128-bit IV (Initialization Vector)
+  - Per-wallet random salt for key/IV derivation
+  - PKCS7 padding
+
+- **SHA-256**: Fast verification hash
+  - Master key verification (hash stored, not passphrase)
+  - Constant-time comparison to prevent timing attacks
+
+### Security Architecture
+
+#### 1. Passphrase Setup (First Time)
+```
+User Passphrase
+    ↓
+Generate random salt (32 bytes)
+    ↓
+PBKDF2-SHA256 (100k iterations) → Master Key (32 bytes)
+    ↓
+SHA-256(Master Key) → Verification Hash
+    ↓
+Store: salt + verification hash (in secure storage)
+Cache: Master Key (in RAM only, auto-timeout)
+```
+
+**Storage:**
+- `master_key_salt`: Random salt for PBKDF2 (stored)
+- `passphrase_verify_hash`: SHA-256 hash of master key (stored)
+- Master key: **Never stored**, only cached in RAM
+
+#### 2. Login Flow
+```
+User enters passphrase
+    ↓
+Load stored salt
+    ↓
+PBKDF2-SHA256(passphrase, salt) → Derived Master Key
+    ↓
+SHA-256(Derived Master Key) =?= Stored Hash
+    ↓
+If match: Cache master key in RAM
+If mismatch: Reject login
+```
+
+**Security Features:**
+- Constant-time hash comparison (prevents timing attacks)
+- Master key cached in RAM with auto-timeout (default: 5 minutes)
+- Configurable inactivity timeout (30s - 15min)
+- Brute-force protection: 3 failed attempts → 30s lockout
+
+#### 3. Wallet Creation/Import
+```
+Generate/Import Ed25519 private key
+    ↓
+Get master key from RAM cache
+    ↓
+Generate random salt (16 bytes)
+    ↓
+PBKDF2(master_key, salt, 1 iter, 48 bytes) → Key (32) + IV (16)
+    ↓
+AES-256-CBC(private_key, key, iv) → Encrypted Key
+    ↓
+Store: {address, encrypted_key, salt}
+```
+
+**Per-Wallet Encryption:**
+- Each wallet has unique random salt
+- Keys derived from master key + salt
+- Fast derivation (1 iteration - master key already strong)
+- Private keys encrypted individually
+
+#### 4. Transaction Signing
+```
+User initiates transaction
+    ↓
+Get master key from RAM (or reject if session expired)
+    ↓
+Decrypt wallet private key (AES-256-CBC)
+    ↓
+Sign transaction (Ed25519)
+    ↓
+Clear decrypted key from memory
+```
+
+**Key Access:**
+- Private keys decrypted on-demand only
+- Kept in memory only during signing
+- Automatic session timeout protection
+
+### Platform-Specific Storage
+
+#### Android
+- **EncryptedSharedPreferences**: Android Keystore-backed encryption
+  - Hardware-backed keys (on supported devices)
+  - AES-256-GCM encryption at rest
+
+#### iOS
+- **Keychain**: Secure Enclave-backed storage
+  - `kSecAttrAccessible`: `first_unlock` (available after device unlock)
+  - Hardware encryption on all modern devices
+
+### Dependencies
+
+- `pointycastle: ^3.9.1` - Pure Dart cryptography (PBKDF2, AES)
+- `flutter_secure_storage` - Platform secure storage wrapper
+- `crypto` - SHA-256 hashing
+- `massa` - Ed25519 blockchain operations
+
 
 ## Development Status
 ### Massa wallet

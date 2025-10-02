@@ -10,7 +10,6 @@ import 'package:mug/service/grpc_service.dart';
 import 'package:mug/service/jrpc_service.dart';
 import 'package:mug/service/local_storage_service.dart';
 import 'package:mug/service/smart_contract_client.dart';
-import 'package:mug/utils/encryption/aes_encryption.dart';
 
 //local storage provider
 final asyncInitProvider = Provider<AsyncInit>((ref) => AsyncInit(ref: ref));
@@ -34,14 +33,20 @@ final explorerApiServiceProvider = Provider<ExplorerApi>((ref) {
 final accountProvider = FutureProvider<Account?>((ref) async {
   //final localStorageService = ref.watch(localStorageServiceProvider);
   final isMainnet = ref.read(localStorageServiceProvider).isMainnet;
-  final defaultAccountKey = await ref.read(localStorageServiceProvider).getDefaultWalletKey();
-  if (defaultAccountKey == null) {
+
+  try {
+    final defaultAccountKey = await ref.read(localStorageServiceProvider).getDefaultWalletKey();
+    if (defaultAccountKey == null) {
+      return null;
+    }
+
+    final account = await Wallet().addAccountFromSecretKey(
+        defaultAccountKey, AddressType.user, isMainnet ? NetworkType.MAINNET : NetworkType.BUILDNET);
+    return account;
+  } catch (e) {
+    // Session expired or not logged in yet - return null
     return null;
   }
-
-  final account = await Wallet().addAccountFromSecretKey(
-      defaultAccountKey, AddressType.user, isMainnet ? NetworkType.MAINNET : NetworkType.BUILDNET);
-  return account;
 });
 
 final smartContractServiceProvider = Provider<SmartContractService?>((ref) {

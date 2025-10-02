@@ -172,8 +172,11 @@ class DexNetworkDataSourceImpl implements DexDataSource {
       return;
     }
     final privateKey = await localStorageService.getWalletKey(address);
+    if (privateKey == null) {
+      throw Exception('Wallet not found for address: $address');
+    }
     final account = await Wallet().addAccountFromSecretKey(
-        privateKey!, AddressType.user, smartContractService!.isBuildnet ? NetworkType.BUILDNET : NetworkType.MAINNET);
+        privateKey, AddressType.user, smartContractService!.isBuildnet ? NetworkType.BUILDNET : NetworkType.MAINNET);
     smartContractService!.updateAccount(account.privateKey());
   }
 }

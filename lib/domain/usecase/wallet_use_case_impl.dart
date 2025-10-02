@@ -11,8 +11,8 @@ import 'package:mug/domain/repository/wallet_repository.dart';
 import 'package:mug/domain/usecase/wallet_use_case.dart';
 import 'package:mug/service/local_storage_service.dart';
 import 'package:mug/service/provider.dart';
-
-import 'package:mug/utils/encryption/aes_encryption.dart';
+import 'package:mug/service/session_manager.dart';
+import 'package:mug/utils/encryption/pbkdf2_encryption.dart';
 import 'package:mug/utils/exception_handling.dart';
 
 class WalletUseCaseImpl implements WalletUseCase {
@@ -27,11 +27,26 @@ class WalletUseCaseImpl implements WalletUseCase {
   @override
   Future<Result<WalletData, Exception>> createWallet() async {
     try {
+      // Get master key from RAM cache
+      final masterKey = SessionManager().masterKey;
+      if (masterKey == null) {
+        throw Exception('Session expired - please login again');
+      }
+
       final wallet = Wallet();
-      final passphrase = await localStorageService.passphrase;
       final account = await wallet.newAccount(AddressType.user, NetworkType.MAINNET);
-      final WalletModel walletEntity =
-          WalletModel(address: account.address(), encryptedKey: encryptAES(account.privateKey(), passphrase));
+
+      final privateKey = account.privateKey();
+      final address = account.address();
+
+      // Encrypt with cached master key (NO passphrase prompt needed!)
+      final encryptedKey = encryptWithMasterKey(privateKey, masterKey);
+
+      final walletEntity = WalletModel(
+        address: address,
+        encryptedKey: encryptedKey
+      );
+
       List<WalletModel> wallets;
       final walletString = await localStorageService.getStoredWallets();
       if (walletString.isNotEmpty) {
@@ -40,6 +55,7 @@ class WalletUseCaseImpl implements WalletUseCase {
       } else {
         wallets = [walletEntity];
       }
+
       await localStorageService.storeWallets(WalletModel.encode(wallets));
       return loadWallets();
     } on Exception catch (error) {
@@ -86,11 +102,25 @@ class WalletUseCaseImpl implements WalletUseCase {
   @override
   Future<Result<WalletData, Exception>> restoreWallet(String privateKey) async {
     try {
+      // Get master key from RAM cache
+      final masterKey = SessionManager().masterKey;
+      if (masterKey == null) {
+        throw Exception('Session expired - please login again');
+      }
+
       final wallet = Wallet();
-      final passphrase = await localStorageService.passphrase;
-      final account = await wallet.addAccountFromSecretKey(privateKey, AddressType.user, NetworkType.MAINNET);
-      final WalletModel walletEntity =
-          WalletModel(address: account.address(), encryptedKey: encryptAES(account.privateKey(), passphrase));
+      final account = await wallet.addAccountFromSecretKey(
+        privateKey,
+        AddressType.user,
+        NetworkType.MAINNET
+      );
+
+      // Encrypt with cached master key (NO passphrase prompt!)
+      final walletEntity = WalletModel(
+        address: account.address(),
+        encryptedKey: encryptWithMasterKey(account.privateKey(), masterKey)
+      );
+
       //get existing storated wallets
       List<WalletModel> wallets;
       final walletString = await localStorageService.getStoredWallets();
