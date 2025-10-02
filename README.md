@@ -195,11 +195,11 @@ Follow the steps below to set up and test the Flutter app on your computer:
 
    ### Steps to Test the App
 
-1. **Clone the Repository**  
+1. **Clone the Repository**
    Clone the project to your local machine:
    ```bash
-   git clone git@github.com:nafsilabs/mug.git
-   cd mug
+   git clone git@github.com:massalabs/massa-station-app.git
+   cd massa-station-app
 
 2. **Install Dependencies**  
    Navigate to the app's root folder and run the following command to install all required packages:
