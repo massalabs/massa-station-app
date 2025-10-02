@@ -23,78 +23,34 @@ class _SettingViewState extends ConsumerState<SettingView> {
   _SettingViewState();
 
   late TextEditingController _txFeeController;
-  late TextEditingController _gasFeeController;
   bool _isTxFeeEditing = false;
-  bool _isGasFeeEditing = false;
 
   @override
   void initState() {
     super.initState();
     final initialTransactionFee = ref.read(settingProvider).feeAmount;
-    final initialGasFee = ref.read(settingProvider).gasAmount;
     _txFeeController = TextEditingController(text: initialTransactionFee.toStringAsFixed(4));
-    _gasFeeController = TextEditingController(text: initialGasFee.toStringAsFixed(4));
   }
 
   @override
   Widget build(BuildContext context) {
     final minimumTxFee = ref.watch(settingProvider).feeAmount;
-    final minimumGasFee = ref.watch(settingProvider).gasAmount;
     return Scaffold(
       body: CommonPadding(
         child: ListView(
           children: <Widget>[
             ListTile(
-              leading: const Icon(Icons.gas_meter_outlined),
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: const Icon(Icons.payment_outlined, size: 20),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Max Gas Fee:"),
+                  const Text("Tx Fee:", style: TextStyle(fontSize: 13)),
                   const HelpInfo(
                       message:
-                          'Maximum Gas fee is the minimum amount of coin required to perform a smart contract transaction on the blockchain."'),
-                  const SizedBox(width: 10),
-                  // Form Field
-                  Expanded(
-                    child: Consumer(
-                      builder: (context, ref, child) {
-                        _gasFeeController.text = ref.watch(settingProvider).gasAmount.toStringAsFixed(4);
-                        return TextFormField(
-                          controller: _gasFeeController,
-                          enabled: _isGasFeeEditing,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: minimumGasFee.toStringAsFixed(4),
-                          ),
-                          autocorrect: true,
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  const Text("MAS"),
-                ],
-              ),
-              trailing: IconButton(
-                icon: Icon(_isGasFeeEditing ? Icons.save : Icons.edit),
-                color: _isTxFeeEditing
-                    ? const Color.fromARGB(255, 104, 191, 208)
-                    : const Color.fromARGB(255, 246, 247, 247),
-                onPressed: _toggleGasFeeEditMode,
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.payment_outlined),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Min Tx Fee:"),
-                  const HelpInfo(
-                      message:
-                          'Minimum Transaction fee is the minimum amount of coins required to perform a normal (non smart contract) transaction on the blockchain."'),
-                  const SizedBox(width: 10),
+                          'Transaction fee is the amount of coins paid to the network for processing transactions.'),
+                  const SizedBox(width: 4),
                   // Form Field
                   Expanded(
                     child: Consumer(
@@ -104,9 +60,12 @@ class _SettingViewState extends ConsumerState<SettingView> {
                           controller: _txFeeController,
                           enabled: _isTxFeeEditing,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: const TextStyle(fontSize: 13),
                           decoration: InputDecoration(
                             border: InputBorder.none,
                             hintText: minimumTxFee.toStringAsFixed(4),
+                            contentPadding: EdgeInsets.zero,
+                            isDense: true,
                           ),
                           autocorrect: true,
                         );
@@ -115,10 +74,13 @@ class _SettingViewState extends ConsumerState<SettingView> {
                   ),
                   // Edit/Save Icon
                   const SizedBox(width: 2),
-                  const Text("MAS"),
+                  const Text("MAS", style: TextStyle(fontSize: 11)),
                 ],
               ),
               trailing: IconButton(
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 icon: Icon(_isTxFeeEditing ? Icons.save : Icons.edit),
                 color: _isTxFeeEditing
                     ? const Color.fromARGB(255, 104, 191, 208)
@@ -128,27 +90,31 @@ class _SettingViewState extends ConsumerState<SettingView> {
             ),
             const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.double_arrow),
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: const Icon(Icons.double_arrow, size: 20),
               title: Row(mainAxisAlignment: MainAxisAlignment.start, children: [
-                const Text("Slippage:"),
+                const Text("Slippage:", style: TextStyle(fontSize: 13)),
                 const HelpInfo(
                     message:
-                        'Slippage is the difference between the expected price of a swapping ond DEX and the actual price.'),
-                const SizedBox(width: 16),
+                        'Maximum price difference you allow between expected and actual swap price.'),
+                const SizedBox(width: 8),
                 SlippageWidget(),
               ]),
             ),
             const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.timer_outlined),
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: const Icon(Icons.timer_outlined, size: 20),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Session Timeout:"),
+                  const Text("Timeout:", style: TextStyle(fontSize: 13)),
                   const HelpInfo(
                       message:
                           'Session will automatically logout after this period of inactivity to protect your wallet.'),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Consumer(
                       builder: (context, ref, child) {
@@ -159,10 +125,12 @@ class _SettingViewState extends ConsumerState<SettingView> {
                         return DropdownButton<int>(
                           value: currentIndex,
                           isExpanded: true,
+                          isDense: true,
+                          style: const TextStyle(fontSize: 13),
                           items: List.generate(timeoutOptions.length, (index) {
                             return DropdownMenuItem<int>(
                               value: index,
-                              child: Text(timeoutLabels[index]),
+                              child: Text(timeoutLabels[index], style: const TextStyle(fontSize: 13)),
                             );
                           }),
                           onChanged: (newIndex) async {
@@ -182,10 +150,12 @@ class _SettingViewState extends ConsumerState<SettingView> {
             ),
             const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: const Icon(Icons.logout, color: Colors.red, size: 20),
               title: const Text(
                 "Logout",
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Colors.red, fontSize: 13),
               ),
               onTap: () {
                 _showLogoutDialog();
@@ -197,22 +167,6 @@ class _SettingViewState extends ConsumerState<SettingView> {
         ),
       ),
     );
-  }
-
-  void _toggleGasFeeEditMode() {
-    setState(() {
-      if (_isGasFeeEditing) {
-        final enteredValue = double.tryParse(_gasFeeController.text);
-        if (enteredValue != null && enteredValue >= minimumFee * 10) {
-          ref.read(settingProvider.notifier).changeGasFee(gasFeeAmount: enteredValue);
-          informationSnackBarMessage(context, "The gas fee is changed!");
-        }
-      } else {
-        final currentFee = ref.read(settingProvider).gasAmount;
-        _gasFeeController.text = currentFee.toStringAsFixed(4);
-      }
-      _isGasFeeEditing = !_isGasFeeEditing;
-    });
   }
 
   void _toggleTxFeeEditMode() {
@@ -271,7 +225,6 @@ class _SettingViewState extends ConsumerState<SettingView> {
   @override
   void dispose() {
     _txFeeController.dispose();
-    _gasFeeController.dispose();
     super.dispose();
   }
 }
