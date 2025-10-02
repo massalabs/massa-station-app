@@ -145,8 +145,7 @@ class _SetPassphraseViewState extends ConsumerState<SetPassphraseView> {
 
   void scrollToBottomIfOnScreenKeyboard() {
     if (MediaQuery.of(context).viewInsets.bottom > 0) {
-      _scrollController.animateTo(_scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 500), curve: Curves.ease);
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     }
   }
 

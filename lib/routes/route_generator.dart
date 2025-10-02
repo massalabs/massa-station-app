@@ -29,18 +29,12 @@ class RouteGenerator {
     // Getting arguments passed in while calling Navigator.pushNamed
     var args = settings.arguments;
     final String? routeName = settings.name;
-    const transitionDuration = 400;
-    const transitionType = PageTransitionType.rightToLeftWithFade;
 
     switch (routeName) {
       case AuthRoutes.authWall:
         if (args is bool) {
-          return PageTransition(
-            child: AuthView(
-              isKeyboardFocused: args,
-            ),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => AuthView(isKeyboardFocused: args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'StreamController<SessionState>');
@@ -48,137 +42,104 @@ class RouteGenerator {
       //auth
       case AuthRoutes.login:
         if (args is bool) {
-          return PageTransition(
-            child: LoginView(
-              isKeyboardFocused: args,
-            ),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => LoginView(isKeyboardFocused: args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'bool');
 
       case AuthRoutes.setPassphrase:
         if (args is bool) {
-          return PageTransition(
-            child: SetPassphraseView(
-              isKeyboardFocused: args,
-            ),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => SetPassphraseView(isKeyboardFocused: args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'StreamController<SessionState>');
 
       case AuthRoutes.root:
-        return PageTransition(
-          child: Mug(),
-          duration: const Duration(milliseconds: transitionDuration),
-          type: transitionType,
+        return MaterialPageRoute(
+          builder: (_) => Mug(),
         );
       case AuthRoutes.home:
-        //if (args is StreamController<SessionState>) {
-        return PageTransition(
-          child: const Home(),
-          duration: const Duration(milliseconds: transitionDuration),
-          type: transitionType,
+        return MaterialPageRoute(
+          builder: (_) => const Home(),
         );
 
 //Explorer routes
       case ExploreRoutes.address:
         if (args is String) {
-          return PageTransition(
-            child: AddressView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => AddressView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'AddressDetail');
 
       case ExploreRoutes.block:
         if (args is String) {
-          return PageTransition(
-            child: BlockView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => BlockView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'BlockDetails');
 
       case ExploreRoutes.operation:
         if (args is String) {
-          return PageTransition(
-            child: OperationView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => OperationView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'OperationDetails');
 
       case ExploreRoutes.domain:
         if (args is DomainArguments) {
-          return PageTransition(
-            child: DomainView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => DomainView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'DomainView');
 
       case ExploreRoutes.mns:
         if (args is MNSArguments) {
-          return PageTransition(
-            child: MNSView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => MNSView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'MNSView');
 
       case ExploreRoutes.notFound:
         if (args is String) {
-          return PageTransition(
-            child: NotFoundView(searchText: args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => NotFoundView(searchText: args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'NotFound');
 
 //Wallet routes
       case WalletRoutes.importWallet:
-        return PageTransition(
-          child: const ImportWalletView(),
-          duration: const Duration(milliseconds: transitionDuration),
-          type: transitionType,
+        return MaterialPageRoute(
+          builder: (_) => const ImportWalletView(),
         );
 
       case WalletRoutes.wallet:
         if (args is WalletViewArg) {
-          return PageTransition(
-            child: WalletView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => WalletView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'Walet Details');
 
       case WalletRoutes.walleName:
         if (args is String) {
-          return PageTransition(
-            child: EditWalletNameView(address: args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => EditWalletNameView(address: args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'Wallet Name');
 
       case WalletRoutes.transfer:
         if (args is AddressEntity) {
-          return PageTransition(
-            child: TransferView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => TransferView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'Token Transfer');
@@ -186,18 +147,14 @@ class RouteGenerator {
 //Dex routes
 
       case DexRoutes.dex:
-        return PageTransition(
-          child: const DexView(),
-          duration: const Duration(milliseconds: transitionDuration),
-          type: transitionType,
+        return MaterialPageRoute(
+          builder: (_) => const DexView(),
         );
 
       case DexRoutes.swap:
         if (args is String) {
-          return PageTransition(
-            child: SwapView(args),
-            duration: const Duration(milliseconds: transitionDuration),
-            type: transitionType,
+          return MaterialPageRoute(
+            builder: (_) => SwapView(args),
           );
         }
         return _errorRoute(route: routeName, argsType: 'SwapView');

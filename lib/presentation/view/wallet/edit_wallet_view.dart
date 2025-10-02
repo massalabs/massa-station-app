@@ -129,12 +129,8 @@ class _EditWalletNameViewState extends ConsumerState<EditWalletNameView> {
                     }
                   },
                   onTap: () {
-                    // Animate scroll to make space for the keyboard
-                    _scrollController.animateTo(
-                      0, // Scroll to the top (adjust if needed)
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.ease,
-                    );
+                    // Jump scroll to make space for the keyboard
+                    _scrollController.jumpTo(0);
                   },
                 ),
               ),
