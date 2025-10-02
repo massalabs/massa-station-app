@@ -41,6 +41,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final passPhraseController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _passwordFocusNode = FocusNode();
   bool? _isKeyboardFocused;
   bool _isHidden = true;
   bool _isLocked = false;
@@ -66,6 +67,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   @override
   void dispose() {
     passPhraseController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -201,6 +203,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
       enabled: !_isLocked,
       enableIMEPersonalizedLearning: false,
       controller: passPhraseController,
+      focusNode: _passwordFocusNode,
       autofocus: _isKeyboardFocused!,
       obscureText: _isHidden,
       decoration: _inputFieldDecoration(inputBoxEdgeRadious),
@@ -217,12 +220,18 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
     if (_noOfAllowedAttempts <= 1) {
       setState(() {
         _isLocked = true;
+        _isKeyboardFocused = false;
       });
       return numberOfAttemptExceded;
     }
 
     if (!isPasswordValid) {
       _noOfAllowedAttempts--;
+      // Don't refocus after validation error
+      _passwordFocusNode.unfocus();
+      setState(() {
+        _isKeyboardFocused = false;
+      });
       final wrongPhraseMsg = 'Wrong passphrase ${_noOfAllowedAttempts.toString()} attempts left!';
       return _noOfAllowedAttempts == 0 ? numberOfAttemptExceded : wrongPhraseMsg;
     }
@@ -322,6 +331,11 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
       final phrase = passPhraseController.text;
       await _login(phrase);
     } else {
+      // Don't refocus keyboard after validation failure
+      _passwordFocusNode.unfocus();
+      setState(() {
+        _isKeyboardFocused = false;
+      });
       informationSnackBarMessage(context, snackMsgWrongEncryptionPhrase);
     }
   }
@@ -390,6 +404,11 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
         AuthRoutes.home,
       );
     } else {
+      // Don't refocus keyboard after failed login
+      _passwordFocusNode.unfocus();
+      setState(() {
+        _isKeyboardFocused = false;
+      });
       informationSnackBarMessage(context, snackMsgWrongEncryptionPhrase);
     }
   }
