@@ -36,7 +36,6 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   // BiometricAuth:
   final LocalAuthentication auth = LocalAuthentication();
   _BiometricState _supportState = _BiometricState.unknown;
-  late bool forcePassphraseInput;
   List<BiometricType> _availableBiometrics = [];
 
   //ClassicLogin:
@@ -56,9 +55,6 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
     final storage = ref.read(localStorageServiceProvider);
     _noOfAllowedAttempts = storage.noOfLogginAttemptAllowed;
     _isKeyboardFocused = widget.isKeyboardFocused ?? true;
-
-    // No longer needed - Passphrase mode has no biometric option
-    forcePassphraseInput = false;
 
     // Load available biometric types
     _loadAvailableBiometrics();
@@ -389,7 +385,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
                 elevation: 5.0,
               ),
               onPressed:
-                  (ref.read(localStorageServiceProvider).isBiometricAuthEnabled && !forcePassphraseInput && !_isLocked)
+                  (ref.read(localStorageServiceProvider).isBiometricAuthEnabled && !_isLocked)
                       ? _authenticate
                       : null,
               child: Wrap(
@@ -540,9 +536,6 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
       // Clear passphrase from memory immediately
       passPhraseController.clear();
 
-      // re-enable biometric auth
-      if (forcePassphraseInput) ref.read(localStorageServiceProvider).incrementBiometricAttemptAllTimeCount();
-
       print("user login status before starting session: ${ref.read(localStorageServiceProvider).isUserActive}");
 
       // start listening for session inactivity on successful login
@@ -676,30 +669,18 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
 
   Future<bool> _authenticate() async {
     bool authenticated = false;
-    print(ref.read(localStorageServiceProvider).biometricAttemptAllTimeCount);
     if (_supportState == _BiometricState.unsupported) {
       showGenericDialog(
         context: context,
         icon: Icons.error_outline,
         message: "No biometrics found. Go to your device settings to enroll your biometric.",
       );
-    } else if (forcePassphraseInput) {
-      showGenericDialog(
-        context: context,
-        icon: Icons.info_outline,
-        message: "Still remember your passphrase? Use passphrase to login this time.",
-      );
     } else {
-      ref.read(localStorageServiceProvider).incrementBiometricAttemptAllTimeCount();
-
       try {
         // Attempt biometric login (native prompt shows automatically)
         authenticated = await ref.read(localStorageServiceProvider).loginWithBiometric();
 
         if (authenticated) {
-          // re-enable biometric auth counter
-          if (forcePassphraseInput) ref.read(localStorageServiceProvider).incrementBiometricAttemptAllTimeCount();
-
           print("user login status before starting session: ${ref.read(localStorageServiceProvider).isUserActive}");
 
           // start listening for session inactivity on successful login
@@ -711,23 +692,16 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
           );
         } else {
           if (mounted) {
-            informationSnackBarMessage(context, 'Biometric authentication failed. Please use passphrase.');
+            informationSnackBarMessage(context, 'Biometric authentication failed');
           }
         }
       } catch (e) {
-        // Close loading dialog
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
         print('Biometric auth error: $e');
         if (mounted) {
-          informationSnackBarMessage(context, 'Biometric authentication error. Please use passphrase.');
+          informationSnackBarMessage(context, 'Biometric authentication error');
         }
       }
     }
-    setState(() {
-      forcePassphraseInput = ref.read(localStorageServiceProvider).biometricAttemptAllTimeCount % 5 == 0;
-    });
     return authenticated;
   }
 }
