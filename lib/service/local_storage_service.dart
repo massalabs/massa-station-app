@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mug/data/model/wallet_model.dart';
+import 'package:mug/service/biometric_key_storage.dart';
 import 'package:mug/service/session_manager.dart';
 import 'package:mug/utils/encryption/pbkdf2_encryption.dart';
 import 'package:pointycastle/export.dart';
@@ -41,10 +42,13 @@ class LocalStorageService {
   bool _isUserActive = false;
   final SharedPreferences sharedPreferences;
   late FlutterSecureStorage _secureStorage;
+  late BiometricKeyStorage _biometricStorage;
+
   LocalStorageService({required this.sharedPreferences}) {
     const androidOptions = AndroidOptions(encryptedSharedPreferences: true);
     const iosOptions = IOSOptions(accessibility: KeychainAccessibility.first_unlock);
     _secureStorage = const FlutterSecureStorage(aOptions: androidOptions, iOptions: iosOptions);
+    _biometricStorage = BiometricKeyStorage();
   }
 
   bool get isFlagSecure => sharedPreferences.getBool(StorageKeys.isFlagSecure) ?? true;
@@ -174,9 +178,90 @@ class LocalStorageService {
   Future<void> clearAllData() async {
     // Clear session first
     SessionManager().endSession();
+    // Clear biometric key
+    await _biometricStorage.deleteBiometricKey();
     await sharedPreferences.clear();
     await _secureStorage.deleteAll();
     _isUserActive = false;
+  }
+
+  // ===== Biometric Authentication Methods =====
+
+  /// Check if device supports biometric authentication
+  Future<bool> canUseBiometrics() async {
+    final isSupported = await _biometricStorage.isDeviceSupported();
+    final canCheck = await _biometricStorage.canCheckBiometrics();
+    final available = await _biometricStorage.getAvailableBiometrics();
+    return isSupported && canCheck && available.isNotEmpty;
+  }
+
+  /// Enable biometric authentication
+  /// Requires passphrase for verification, then stores encrypted master key
+  Future<bool> enableBiometricAuth(String passphrase) async {
+    // Verify passphrase first
+    final isValid = await verifyAndCacheMasterKey(passphrase);
+    if (!isValid) {
+      return false;
+    }
+
+    // Get the cached master key
+    final masterKey = SessionManager().masterKey;
+    if (masterKey == null) {
+      return false;
+    }
+
+    // Store master key with biometric protection
+    final success = await _biometricStorage.storeBiometricKey(masterKey);
+    if (success) {
+      await setIsBiometricAuthEnabled(true);
+    }
+
+    return success;
+  }
+
+  /// Disable biometric authentication
+  Future<bool> disableBiometricAuth() async {
+    final success = await _biometricStorage.deleteBiometricKey();
+    if (success) {
+      await setIsBiometricAuthEnabled(false);
+    }
+    return success;
+  }
+
+  /// Login with biometric authentication
+  /// Returns true if successful and master key is cached
+  Future<bool> loginWithBiometric() async {
+    if (!isBiometricAuthEnabled) {
+      return false;
+    }
+
+    // Retrieve master key with biometric auth
+    final masterKey = await _biometricStorage.retrieveBiometricKey();
+    if (masterKey == null) {
+      return false;
+    }
+
+    // Verify the retrieved key matches our verification hash
+    final hashB64 = await getSecureString('passphrase_verify_hash');
+    if (hashB64 == null) {
+      return false;
+    }
+
+    final storedHash = base64.decode(hashB64);
+    final computedHash = sha256.convert(masterKey).bytes;
+
+    if (!_constantTimeEquals(storedHash, Uint8List.fromList(computedHash))) {
+      return false;
+    }
+
+    // Cache master key in RAM
+    SessionManager().setMasterKey(masterKey);
+    return true;
+  }
+
+  /// Check if biometric key is stored
+  Future<bool> hasBiometricKey() async {
+    return await _biometricStorage.hasBiometricKey();
   }
 
   Future<double> setMinimumGassFee(double minimumGassFee) async {

@@ -146,6 +146,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
             _buildTimeOut(),
             _inputField(),
             _buildLoginButton(),
+            if (ref.read(localStorageServiceProvider).isBiometricAuthEnabled) _buildBiometricAuthButton(context),
             const SizedBox(height: 120), // Increased spacing to push "Forgot Passphrase" down
             _buildForgotPassphrase(),
           ],
@@ -509,18 +510,76 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
       );
     } else {
       ref.read(localStorageServiceProvider).incrementBiometricAttemptAllTimeCount();
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return WillPopScope(
+            onWillPop: () async => false,
+            child: Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 20),
+                    Text(
+                      'Authenticating...',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+
       try {
-        authenticated = await auth.authenticate(
-          localizedReason: 'Login using your biometric credential',
-          options: const AuthenticationOptions(stickyAuth: true),
-        );
+        // Attempt biometric login
+        authenticated = await ref.read(localStorageServiceProvider).loginWithBiometric();
+
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        if (authenticated) {
+          // re-enable biometric auth counter
+          if (forcePassphraseInput) ref.read(localStorageServiceProvider).incrementBiometricAttemptAllTimeCount();
+
+          print("user login status before starting session: ${ref.read(localStorageServiceProvider).isUserActive}");
+
+          // start listening for session inactivity on successful login
+          _session.add(SessionState.startListening);
+          ref.read(localStorageServiceProvider).setLoginStatus(true);
+          await Navigator.pushReplacementNamed(
+            context,
+            AuthRoutes.home,
+          );
+        } else {
+          if (mounted) {
+            informationSnackBarMessage(context, 'Biometric authentication failed. Please use passphrase.');
+          }
+        }
       } catch (e) {
-        //print(e);
-      }
-      // Biometric auth no longer retrieves passphrase - needs to be disabled for now
-      // TODO: Implement biometric auth with secure enclave storage
-      if (authenticated) {
-        informationSnackBarMessage(context, 'Biometric auth needs reconfiguration after security upgrade');
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+        print('Biometric auth error: $e');
+        if (mounted) {
+          informationSnackBarMessage(context, 'Biometric authentication error. Please use passphrase.');
+        }
       }
     }
     setState(() {

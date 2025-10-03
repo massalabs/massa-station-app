@@ -333,8 +333,21 @@ class _SetPassphraseViewState extends ConsumerState<SetPassphraseView> {
           Navigator.of(context).pop();
         }
 
-        // Auto-login after setting passphrase instead of going to login screen
+        // Ask user if they want to enable biometric auth
         if (mounted) {
+          final shouldAskBiometric = await ref.read(localStorageServiceProvider).canUseBiometrics();
+
+          if (shouldAskBiometric) {
+            final enableBiometric = await _showEnableBiometricPrompt();
+            if (enableBiometric == true) {
+              // Master key is already cached, so we can directly enable biometric
+              final masterKey = ref.read(localStorageServiceProvider);
+              // Use the just-entered passphrase to enable biometric
+              await masterKey.enableBiometricAuth(enteredPassphrase);
+            }
+          }
+
+          // Auto-login after setting passphrase
           ref.read(localStorageServiceProvider).setLoginStatus(true);
           TextInput.finishAutofillContext();
           await Navigator.pushReplacementNamed(
@@ -346,5 +359,29 @@ class _SetPassphraseViewState extends ConsumerState<SetPassphraseView> {
         informationSnackBarMessage(context, 'Passphrase mismatch!');
       }
     }
+  }
+
+  Future<bool?> _showEnableBiometricPrompt() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Enable Biometric Login?'),
+          content: const Text(
+            'Would you like to enable biometric authentication (fingerprint/face ID) for quick login?\n\nYou can change this later in Settings.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Skip'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Enable'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
