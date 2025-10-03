@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:mug/data/model/wallet_model.dart';
 import 'package:mug/service/biometric_key_storage.dart';
 import 'package:mug/service/session_manager.dart';
@@ -28,6 +29,7 @@ class StorageKeys {
   static const isBiometricAuthEnabled = 'isBiometricAuthEnabled';
   static const biometricAttemptAllTimeCount = 'biometricAttemptAllTimeCount';
   static const isAutoRotate = 'isAutoRotate';
+  static const authenticationMode = 'authentication-mode'; // 'biometric_only' or 'passphrase'
   //massa network based
   static const minimumGassFee = 'minimum-gass-fee';
   static const minimumFee = 'minimum-fee';
@@ -36,6 +38,11 @@ class StorageKeys {
   static const isMainnet = 'is-mainnet';
   static const wallets = 'secure-wallets';
   static const defaultWalletAddress = 'default-wallet-address';
+}
+
+enum AuthenticationMode {
+  biometricOnly,  // Random key in enclave, biometric + device PIN fallback
+  passphrase,     // PBKDF2 key, passphrase + optional biometric (no device PIN)
 }
 
 class LocalStorageService {
@@ -53,6 +60,45 @@ class LocalStorageService {
 
   bool get isFlagSecure => sharedPreferences.getBool(StorageKeys.isFlagSecure) ?? true;
 
+  // Authentication mode management
+  AuthenticationMode get authenticationMode {
+    final modeString = sharedPreferences.getString(StorageKeys.authenticationMode);
+    if (modeString == 'biometric_only') {
+      return AuthenticationMode.biometricOnly;
+    }
+    return AuthenticationMode.passphrase; // default
+  }
+
+  Future<void> setAuthenticationMode(AuthenticationMode mode) async {
+    final modeString = mode == AuthenticationMode.biometricOnly ? 'biometric_only' : 'passphrase';
+    await sharedPreferences.setString(StorageKeys.authenticationMode, modeString);
+  }
+
+  bool get isAuthenticationModeSet {
+    return sharedPreferences.containsKey(StorageKeys.authenticationMode);
+  }
+
+  /// Set up Biometric Only mode (one-time setup)
+  /// Generates random master key and stores in secure enclave only
+  Future<bool> setupBiometricOnlyMode() async {
+    // Generate random 256-bit master key
+    final masterKey = generateRandomNonZero(32);
+
+    // Store in secure enclave with biometric protection
+    final success = await _biometricStorage.storeBiometricKey(masterKey);
+    if (!success) {
+      return false;
+    }
+
+    // Cache master key in RAM for immediate use
+    SessionManager().setMasterKey(masterKey);
+
+    // Set authentication mode
+    await setAuthenticationMode(AuthenticationMode.biometricOnly);
+
+    return true;
+  }
+
   /// Set passphrase verification (one-time setup)
   /// Stores master key salt and verification hash, then caches master key in RAM
   Future<void> setPassphraseVerification(String passphrase) async {
@@ -69,6 +115,9 @@ class LocalStorageService {
 
     // Cache master key in RAM for immediate use
     SessionManager().setMasterKey(masterKey);
+
+    // Set authentication mode
+    await setAuthenticationMode(AuthenticationMode.passphrase);
   }
 
   /// Verify passphrase and cache master key in RAM
@@ -159,7 +208,7 @@ class LocalStorageService {
   int get focusTimeout => inactivityTimeout;
 
   //for logout popup alert. default: 15 seconds
-  int get preInactivityLogoutCounter => sharedPreferences.getInt(StorageKeys.preInactivityLogoutCounter) ?? 15;
+  int get preInactivityLogoutCounter => sharedPreferences.getInt(StorageKeys.preInactivityLogoutCounter) ?? 5;
 
   bool get isBiometricAuthEnabled => sharedPreferences.getBool(StorageKeys.isBiometricAuthEnabled) ?? false;
   Future<void> setIsBiometricAuthEnabled(bool flag) async =>
@@ -195,62 +244,22 @@ class LocalStorageService {
     return isSupported && canCheck && available.isNotEmpty;
   }
 
-  /// Enable biometric authentication
-  /// Requires passphrase for verification, then stores encrypted master key
-  Future<bool> enableBiometricAuth(String passphrase) async {
-    // Verify passphrase first
-    final isValid = await verifyAndCacheMasterKey(passphrase);
-    if (!isValid) {
-      return false;
-    }
-
-    // Get the cached master key
-    final masterKey = SessionManager().masterKey;
-    if (masterKey == null) {
-      return false;
-    }
-
-    // Store master key with biometric protection
-    final success = await _biometricStorage.storeBiometricKey(masterKey);
-    if (success) {
-      await setIsBiometricAuthEnabled(true);
-    }
-
-    return success;
+  /// Get available biometric types (face, fingerprint, iris, etc.)
+  Future<List<BiometricType>> getAvailableBiometrics() async {
+    return await _biometricStorage.getAvailableBiometrics();
   }
 
-  /// Disable biometric authentication
-  Future<bool> disableBiometricAuth() async {
-    final success = await _biometricStorage.deleteBiometricKey();
-    if (success) {
-      await setIsBiometricAuthEnabled(false);
-    }
-    return success;
-  }
-
-  /// Login with biometric authentication
+  /// Login with biometric authentication (Biometric Only mode)
   /// Returns true if successful and master key is cached
   Future<bool> loginWithBiometric() async {
-    if (!isBiometricAuthEnabled) {
+    // Only for biometric-only mode
+    if (authenticationMode != AuthenticationMode.biometricOnly) {
       return false;
     }
 
-    // Retrieve master key with biometric auth
-    final masterKey = await _biometricStorage.retrieveBiometricKey();
+    // Always allow device PIN fallback
+    final masterKey = await _biometricStorage.retrieveBiometricKey(biometricOnly: false);
     if (masterKey == null) {
-      return false;
-    }
-
-    // Verify the retrieved key matches our verification hash
-    final hashB64 = await getSecureString('passphrase_verify_hash');
-    if (hashB64 == null) {
-      return false;
-    }
-
-    final storedHash = base64.decode(hashB64);
-    final computedHash = sha256.convert(masterKey).bytes;
-
-    if (!_constantTimeEquals(storedHash, Uint8List.fromList(computedHash))) {
       return false;
     }
 

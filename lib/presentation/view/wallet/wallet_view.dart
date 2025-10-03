@@ -21,6 +21,7 @@ import 'package:mug/presentation/provider/wallet_selection_provider.dart';
 import 'package:mug/presentation/state/wallet_state.dart';
 import 'package:mug/presentation/widget/widget.dart';
 import 'package:mug/routes/routes_name.dart';
+import 'package:mug/service/local_storage_service.dart';
 import 'package:mug/service/provider.dart';
 import 'package:mug/utils/number_helpers.dart';
 import 'package:mug/utils/string_helpers.dart';
@@ -235,7 +236,7 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                                 tabs: const [
                                   Tab(text: 'TOKENS'),
                                   Tab(text: 'TRANSACTIONS'),
-                                  Tab(text: 'SETTING'),
+                                  Tab(child: Text('SETTINGS', style: TextStyle(color: Colors.orange))),
                                 ],
                                 labelColor: Colors.blue,
                                 unselectedLabelColor: Colors.grey,
@@ -345,63 +346,81 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
                                               Text(
-                                                "Private Key: ***",
-                                                style: TextStyle(fontSize: Constants.fontSize),
+                                                "Backup Private Key",
+                                                style: TextStyle(fontSize: Constants.fontSize, color: Colors.orange),
                                               ),
                                               OutlinedButton.icon(
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: const BorderSide(color: Colors.orange),
+                                                  ),
                                                   onPressed: () async {
-                                                    // Re-authenticate before showing private key
-                                                    final passphrase = await _showPassphraseDialog(context);
-                                                    if (passphrase == null) return; // User cancelled
+                                                    // Re-authenticate based on mode
+                                                    final storage = ref.read(localStorageServiceProvider);
+                                                    bool isValid = false;
 
-                                                    // Show loading dialog during PBKDF2
-                                                    if (context.mounted) {
-                                                      showDialog(
-                                                        context: context,
-                                                        barrierDismissible: false,
-                                                        builder: (BuildContext context) {
-                                                          return WillPopScope(
-                                                            onWillPop: () async => false,
-                                                            child: Dialog(
-                                                              backgroundColor: Colors.transparent,
-                                                              elevation: 0,
-                                                              child: Container(
-                                                                padding: const EdgeInsets.all(20),
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors.grey[900],
-                                                                  borderRadius: BorderRadius.circular(10),
-                                                                ),
-                                                                child: Column(
-                                                                  mainAxisSize: MainAxisSize.min,
-                                                                  children: const [
-                                                                    CircularProgressIndicator(),
-                                                                    SizedBox(height: 20),
-                                                                    Text(
-                                                                      'Verifying passphrase...',
-                                                                      style: TextStyle(color: Colors.white),
-                                                                    ),
-                                                                  ],
+                                                    if (storage.authenticationMode == AuthenticationMode.biometricOnly) {
+                                                      // Use biometric authentication
+                                                      isValid = await storage.loginWithBiometric();
+                                                      if (!isValid) {
+                                                        if (context.mounted) {
+                                                          informationSnackBarMessage(context, "Authentication failed!");
+                                                        }
+                                                        return;
+                                                      }
+                                                    } else {
+                                                      // Use passphrase authentication
+                                                      final passphrase = await _showPassphraseDialog(context);
+                                                      if (passphrase == null) return; // User cancelled
+
+                                                      // Show loading dialog during PBKDF2
+                                                      if (context.mounted) {
+                                                        showDialog(
+                                                          context: context,
+                                                          barrierDismissible: false,
+                                                          builder: (BuildContext context) {
+                                                            return WillPopScope(
+                                                              onWillPop: () async => false,
+                                                              child: Dialog(
+                                                                backgroundColor: Colors.transparent,
+                                                                elevation: 0,
+                                                                child: Container(
+                                                                  padding: const EdgeInsets.all(20),
+                                                                  decoration: BoxDecoration(
+                                                                    color: Colors.grey[900],
+                                                                    borderRadius: BorderRadius.circular(10),
+                                                                  ),
+                                                                  child: Column(
+                                                                    mainAxisSize: MainAxisSize.min,
+                                                                    children: const [
+                                                                      CircularProgressIndicator(),
+                                                                      SizedBox(height: 20),
+                                                                      Text(
+                                                                        'Verifying passphrase...',
+                                                                        style: TextStyle(color: Colors.white),
+                                                                      ),
+                                                                    ],
+                                                                  ),
                                                                 ),
                                                               ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      );
-                                                    }
-
-                                                    // Verify passphrase
-                                                    final isValid = await ref.read(localStorageServiceProvider).verifyAndCacheMasterKey(passphrase);
-
-                                                    // Close loading dialog
-                                                    if (context.mounted) {
-                                                      Navigator.of(context).pop();
-                                                    }
-
-                                                    if (!isValid) {
-                                                      if (context.mounted) {
-                                                        informationSnackBarMessage(context, "Wrong passphrase!");
+                                                            );
+                                                          },
+                                                        );
                                                       }
-                                                      return;
+
+                                                      // Verify passphrase
+                                                      isValid = await storage.verifyAndCacheMasterKey(passphrase);
+
+                                                      // Close loading dialog
+                                                      if (context.mounted) {
+                                                        Navigator.of(context).pop();
+                                                      }
+
+                                                      if (!isValid) {
+                                                        if (context.mounted) {
+                                                          informationSnackBarMessage(context, "Wrong passphrase!");
+                                                        }
+                                                        return;
+                                                      }
                                                     }
 
                                                     final wallet = await ref
@@ -412,8 +431,8 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                                                       await privateKeyBottomSheet(context, wallet!, isDarkTheme);
                                                     }
                                                   },
-                                                  label: const Text("Show"),
-                                                  icon: const Icon(Icons.lock_open)),
+                                                  label: const Text("Show", style: TextStyle(color: Colors.orange)),
+                                                  icon: const Icon(Icons.lock_open, color: Colors.orange)),
                                             ],
                                           ),
                                         ),
@@ -429,7 +448,79 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                                               ),
                                               OutlinedButton.icon(
                                                   onPressed: () async {
-                                                    await _showRemoveWalletDialog(context, addressEntity.address);
+                                                    // Re-authenticate based on mode before removing
+                                                    final storage = ref.read(localStorageServiceProvider);
+                                                    bool isValid = false;
+
+                                                    if (storage.authenticationMode == AuthenticationMode.biometricOnly) {
+                                                      // Use biometric authentication
+                                                      isValid = await storage.loginWithBiometric();
+                                                      if (!isValid) {
+                                                        if (context.mounted) {
+                                                          informationSnackBarMessage(context, "Authentication failed!");
+                                                        }
+                                                        return;
+                                                      }
+                                                    } else {
+                                                      // Use passphrase authentication
+                                                      final passphrase = await _showPassphraseDialog(context);
+                                                      if (passphrase == null) return; // User cancelled
+
+                                                      // Show loading dialog during PBKDF2
+                                                      if (context.mounted) {
+                                                        showDialog(
+                                                          context: context,
+                                                          barrierDismissible: false,
+                                                          builder: (BuildContext context) {
+                                                            return WillPopScope(
+                                                              onWillPop: () async => false,
+                                                              child: Dialog(
+                                                                backgroundColor: Colors.transparent,
+                                                                elevation: 0,
+                                                                child: Container(
+                                                                  padding: const EdgeInsets.all(20),
+                                                                  decoration: BoxDecoration(
+                                                                    color: Colors.grey[900],
+                                                                    borderRadius: BorderRadius.circular(10),
+                                                                  ),
+                                                                  child: Column(
+                                                                    mainAxisSize: MainAxisSize.min,
+                                                                    children: const [
+                                                                      CircularProgressIndicator(),
+                                                                      SizedBox(height: 20),
+                                                                      Text(
+                                                                        'Verifying passphrase...',
+                                                                        style: TextStyle(color: Colors.white),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        );
+                                                      }
+
+                                                      // Verify passphrase
+                                                      isValid = await storage.verifyAndCacheMasterKey(passphrase);
+
+                                                      // Close loading dialog
+                                                      if (context.mounted) {
+                                                        Navigator.of(context).pop();
+                                                      }
+
+                                                      if (!isValid) {
+                                                        if (context.mounted) {
+                                                          informationSnackBarMessage(context, "Wrong passphrase!");
+                                                        }
+                                                        return;
+                                                      }
+                                                    }
+
+                                                    // Authentication successful, proceed with removal
+                                                    if (context.mounted) {
+                                                      await _showRemoveWalletDialog(context, addressEntity.address);
+                                                    }
                                                   },
                                                   style: OutlinedButton.styleFrom(
                                                     foregroundColor: Colors.red,
@@ -712,17 +803,6 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
       print('Current wallet count: ${wallets.length}');
     }
 
-    // Check if this is the only wallet
-    if (wallets.length == 1) {
-      if (kDebugMode) {
-        print('Cannot remove last wallet');
-      }
-      if (mounted) {
-        informationSnackBarMessage(context, "Cannot remove the last wallet!");
-      }
-      return;
-    }
-
     // Remove the wallet
     wallets.removeWhere((wallet) => wallet.address == address);
     if (kDebugMode) {
@@ -736,10 +816,17 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
       print('Default wallet: $defaultWallet');
     }
     if (defaultWallet == address) {
-      if (kDebugMode) {
-        print('Removed wallet was default, setting new default: ${wallets.first.address}');
+      if (wallets.isNotEmpty) {
+        if (kDebugMode) {
+          print('Removed wallet was default, setting new default: ${wallets.first.address}');
+        }
+        await ref.read(localStorageServiceProvider).setDefaultWallet(wallets.first.address);
+      } else {
+        if (kDebugMode) {
+          print('Removed last wallet, clearing default');
+        }
+        await ref.read(localStorageServiceProvider).setDefaultWallet('');
       }
-      await ref.read(localStorageServiceProvider).setDefaultWallet(wallets.first.address);
       ref.invalidate(accountProvider);
       ref.invalidate(smartContractServiceProvider);
     }

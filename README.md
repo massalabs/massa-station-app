@@ -44,6 +44,27 @@ Massa Station App implements multiple layers of cryptographic security to protec
   - Master key verification (hash stored, not passphrase)
   - Constant-time comparison to prevent timing attacks
 
+### Authentication Modes
+
+Massa Station App supports two authentication modes to protect your wallet:
+
+#### 1. Biometric Authentication
+When biometric authentication is enabled:
+- A secure random 32-byte master key is generated automatically
+- The master key is securely stored in platform-specific secure storage:
+  - **Android**: Encrypted using Android Keystore (hardware-backed on supported devices)
+  - **iOS**: Stored in Keychain with Secure Enclave protection
+- Access to the master key requires biometric authentication (fingerprint, Face ID, etc.)
+- No passphrase needed - authentication is purely biometric
+- Provides the most convenient experience on supported devices
+
+#### 2. Passphrase Authentication
+When biometric authentication is not wanted or unavailable:
+- The master key is derived from your passphrase using PBKDF2-HMAC-SHA256
+- The master key is never stored, only cached in RAM during active sessions
+- You must enter your passphrase each time the session expires
+- Works on all devices regardless of biometric hardware support
+
 ### Security Architecture
 
 #### 1. Passphrase Setup (First Time)
@@ -66,6 +87,19 @@ Cache: Master Key (in RAM only, auto-timeout)
 - Master key: **Never stored**, only cached in RAM
 
 #### 2. Login Flow
+
+**Biometric Mode:**
+```
+User authenticates with biometric (fingerprint/Face ID)
+    ↓
+Platform verifies biometric
+    ↓
+If verified: Retrieve master key from secure storage
+    ↓
+Cache master key in RAM
+```
+
+**Passphrase Mode:**
 ```
 User enters passphrase
     ↓
@@ -80,9 +114,9 @@ If mismatch: Reject login
 ```
 
 **Security Features:**
-- Constant-time hash comparison (prevents timing attacks)
-- Master key cached in RAM with auto-timeout (default: 5 minutes)
-- Configurable inactivity timeout (30s - 15min)
+- Biometric authentication handled by platform (hardware-backed)
+- Passphrase: Constant-time hash comparison (prevents timing attacks)
+- Master key cached in RAM with auto-timeout
 - Brute-force protection: 3 failed attempts → 30s lockout
 
 #### 3. Wallet Creation/Import

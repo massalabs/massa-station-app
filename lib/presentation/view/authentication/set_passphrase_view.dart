@@ -333,21 +333,8 @@ class _SetPassphraseViewState extends ConsumerState<SetPassphraseView> {
           Navigator.of(context).pop();
         }
 
-        // Ask user if they want to enable biometric auth
+        // Auto-login after setting passphrase (removed biometric prompt - Passphrase mode is passphrase only)
         if (mounted) {
-          final shouldAskBiometric = await ref.read(localStorageServiceProvider).canUseBiometrics();
-
-          if (shouldAskBiometric) {
-            final enableBiometric = await _showEnableBiometricPrompt();
-            if (enableBiometric == true) {
-              // Master key is already cached, so we can directly enable biometric
-              final masterKey = ref.read(localStorageServiceProvider);
-              // Use the just-entered passphrase to enable biometric
-              await masterKey.enableBiometricAuth(enteredPassphrase);
-            }
-          }
-
-          // Auto-login after setting passphrase
           ref.read(localStorageServiceProvider).setLoginStatus(true);
           TextInput.finishAutofillContext();
           await Navigator.pushReplacementNamed(

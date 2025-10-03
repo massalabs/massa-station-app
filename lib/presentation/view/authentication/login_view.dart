@@ -16,6 +16,7 @@ import 'package:local_session_timeout/local_session_timeout.dart';
 import 'package:mug/presentation/provider/local_session_timeout_provider.dart';
 import 'package:mug/presentation/provider/wallet_list_provider.dart';
 import 'package:mug/routes/routes.dart';
+import 'package:mug/service/local_storage_service.dart';
 import 'package:mug/service/provider.dart';
 import 'package:mug/presentation/widget/widget.dart';
 
@@ -36,6 +37,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   final LocalAuthentication auth = LocalAuthentication();
   _BiometricState _supportState = _BiometricState.unknown;
   late bool forcePassphraseInput;
+  List<BiometricType> _availableBiometrics = [];
 
   //ClassicLogin:
   GlobalKey<FormState> _formKey = GlobalKey<FormState>();
@@ -51,10 +53,17 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   @override
   void initState() {
     super.initState();
-    _noOfAllowedAttempts = ref.read(localStorageServiceProvider).noOfLogginAttemptAllowed;
+    final storage = ref.read(localStorageServiceProvider);
+    _noOfAllowedAttempts = storage.noOfLogginAttemptAllowed;
     _isKeyboardFocused = widget.isKeyboardFocused ?? true;
-    forcePassphraseInput = ref.read(localStorageServiceProvider).biometricAttemptAllTimeCount % 5 == 0;
-    _lockoutTime = ref.read(localStorageServiceProvider).bruteforceLockOutTime;
+
+    // No longer needed - Passphrase mode has no biometric option
+    forcePassphraseInput = false;
+
+    // Load available biometric types
+    _loadAvailableBiometrics();
+
+    _lockoutTime = storage.bruteforceLockOutTime;
 
     // BiometricAuth:
     auth.isDeviceSupported().then(
@@ -73,7 +82,11 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
 
   @override
   Future<void> afterFirstLayout(BuildContext context) async {
-    if (ref.read(localStorageServiceProvider).isBiometricAuthEnabled && (widget.isKeyboardFocused ?? true)) {
+    final storage = ref.read(localStorageServiceProvider);
+    final authMode = storage.authenticationMode;
+
+    // Auto-trigger biometric for Biometric Only mode
+    if (authMode == AuthenticationMode.biometricOnly && (widget.isKeyboardFocused ?? true)) {
       await _authenticate();
     }
   }
@@ -136,7 +149,63 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
 
   Widget _buildLoginWorkflow({required BuildContext context}) {
     const double padding = 16.0;
+    final authMode = ref.read(localStorageServiceProvider).authenticationMode;
 
+    // Biometric Only mode - show only biometric button
+    if (authMode == AuthenticationMode.biometricOnly) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(padding),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.08),
+            const Icon(Icons.lock_outline, size: 100, color: Colors.blue),
+            const SizedBox(height: 24),
+            Text(
+              _getBiometricLabel(),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _authenticate,
+              icon: Icon(_getBiometricIcon(), size: 36, color: Colors.blue),
+              label: const Text('Unlock', style: TextStyle(fontSize: 22, color: Colors.blue)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 30, 30, 30),
+                minimumSize: const Size(240, 70),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.warning, color: Colors.orange, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Always back up your wallet private keys!\nThey are your only way to recover funds in case of lost phone.',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.05),
+            _buildClearDataButton(),
+          ],
+        ),
+      );
+    }
+
+    // Passphrase mode - show passphrase field only (no biometric option)
     return Form(
       key: _formKey,
       child: SingleChildScrollView(
@@ -146,8 +215,28 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
             _buildTimeOut(),
             _inputField(),
             _buildLoginButton(),
-            if (ref.read(localStorageServiceProvider).isBiometricAuthEnabled) _buildBiometricAuthButton(context),
-            const SizedBox(height: 120), // Increased spacing to push "Forgot Passphrase" down
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.warning, color: Colors.orange, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Always back up your wallet private keys!\nThey are your only way to recover funds in case of lost phone.',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 80),
             _buildForgotPassphrase(),
           ],
         ),
@@ -269,7 +358,7 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   }
 
   Widget _buildLoginButton() {
-    const String loginText = 'Login';
+    const String loginText = 'Unlock';
 
     return ButtonWidget(
       isDarkTheme: true,
@@ -303,14 +392,14 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
                   (ref.read(localStorageServiceProvider).isBiometricAuthEnabled && !forcePassphraseInput && !_isLocked)
                       ? _authenticate
                       : null,
-              child: const Wrap(
+              child: Wrap(
                 children: <Widget>[
                   Icon(
-                    Icons.fingerprint,
+                    _getBiometricIcon(),
                     size: 30.0,
                   ),
-                  SizedBox(width: 10),
-                  Text(
+                  const SizedBox(width: 10),
+                  const Text(
                     'Biometric',
                     style: TextStyle(fontSize: 20),
                   ),
@@ -338,6 +427,66 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
       });
       informationSnackBarMessage(context, snackMsgWrongEncryptionPhrase);
     }
+  }
+
+  Future<void> _loadAvailableBiometrics() async {
+    try {
+      final biometrics = await ref.read(localStorageServiceProvider).getAvailableBiometrics();
+      print('🔐 Available biometrics: $biometrics');
+      if (mounted) {
+        setState(() {
+          _availableBiometrics = biometrics;
+        });
+      }
+    } catch (e) {
+      print('🔐 Error loading biometrics: $e');
+      // Ignore errors, default to fingerprint icon
+    }
+  }
+
+  IconData _getBiometricIcon() {
+    // Check for actual biometric types (not security levels)
+    final actualBiometrics = _availableBiometrics.where((type) =>
+      type != BiometricType.weak && type != BiometricType.strong
+    ).toList();
+
+    // If multiple actual biometric types, show generic icon
+    if (actualBiometrics.length > 1) {
+      return Icons.lock_outline;
+    }
+
+    if (_availableBiometrics.contains(BiometricType.face)) {
+      return Icons.face;
+    } else if (_availableBiometrics.contains(BiometricType.iris)) {
+      return Icons.remove_red_eye;
+    } else if (_availableBiometrics.contains(BiometricType.fingerprint)) {
+      return Icons.fingerprint;
+    }
+
+    // Default to fingerprint (for weak/strong on Android)
+    return Icons.fingerprint;
+  }
+
+  String _getBiometricLabel() {
+    // Check for actual biometric types (not security levels)
+    final actualBiometrics = _availableBiometrics.where((type) =>
+      type != BiometricType.weak && type != BiometricType.strong
+    ).toList();
+
+    if (actualBiometrics.length > 1) {
+      return 'Biometric Authentication';
+    }
+
+    if (_availableBiometrics.contains(BiometricType.face)) {
+      return 'Face Authentication';
+    } else if (_availableBiometrics.contains(BiometricType.iris)) {
+      return 'Iris Authentication';
+    } else if (_availableBiometrics.contains(BiometricType.fingerprint)) {
+      return 'Fingerprint Authentication';
+    }
+
+    // Default for weak/strong on Android
+    return 'Biometric Authentication';
   }
 
   Future<void> _login(String passphrase) async {
@@ -433,23 +582,53 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
             },
           ),
         ),
-        Container(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            child: const Text(
-              "Forgot Passphrase? Clear All Data",
-              style: TextStyle(fontSize: 12, color: Colors.red),
-            ),
-            onPressed: () {
-              _showClearDataDialog();
-            },
-          ),
-        ),
+        _buildClearDataButton(),
       ],
     );
   }
 
-  void _showClearDataDialog() {
+  Widget _buildClearDataButton() {
+    return Container(
+      alignment: Alignment.centerRight,
+      child: TextButton(
+        child: Text(
+          ref.read(localStorageServiceProvider).authenticationMode == AuthenticationMode.biometricOnly
+              ? "Clear All Data"
+              : "Forgot Passphrase? Clear All Data",
+          style: const TextStyle(fontSize: 12, color: Colors.red),
+        ),
+        onPressed: () {
+          _showClearDataDialog();
+        },
+      ),
+    );
+  }
+
+  void _showClearDataDialog() async {
+    final authMode = ref.read(localStorageServiceProvider).authenticationMode;
+
+    // For Biometric Only mode, require biometric authentication first
+    if (authMode == AuthenticationMode.biometricOnly) {
+      // Authenticate with biometric
+      final authenticated = await auth.authenticate(
+        localizedReason: 'Authenticate to clear all data',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: false, // Allow device PIN fallback
+        ),
+      );
+
+      if (!authenticated) {
+        if (mounted) {
+          informationSnackBarMessage(context, 'Authentication required to clear data');
+        }
+        return;
+      }
+    }
+
+    // Show confirmation dialog
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -511,47 +690,9 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
     } else {
       ref.read(localStorageServiceProvider).incrementBiometricAttemptAllTimeCount();
 
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return WillPopScope(
-            onWillPop: () async => false,
-            child: Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 20),
-                    Text(
-                      'Authenticating...',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-
       try {
-        // Attempt biometric login
+        // Attempt biometric login (native prompt shows automatically)
         authenticated = await ref.read(localStorageServiceProvider).loginWithBiometric();
-
-        // Close loading dialog
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
 
         if (authenticated) {
           // re-enable biometric auth counter

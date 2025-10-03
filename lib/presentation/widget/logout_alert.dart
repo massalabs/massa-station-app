@@ -155,6 +155,10 @@ Future<bool?> preInactivityLogOffAlert(BuildContext context) async {
     context: context,
     barrierDismissible: false,
     builder: (BuildContext context) {
+      // Ensure timeout is set before starting timer
+      if (_timeoutSeconds == 0) {
+        _timeoutSeconds = 5; // fallback default
+      }
       _startTimer(context); // start filling the stream with coutndown data
       return PreInactivityLogOff();
     },

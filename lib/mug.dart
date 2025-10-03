@@ -92,8 +92,8 @@ class _MugState extends ConsumerState<Mug> {
         print('User response to alert: $isUserActive');
       }
       if (isUserActive == null || showPreLogoffAlert == false) {
-        print('Logging out with message');
-        logout(showLogoutMsg: true);
+        print('Logging out without message (directly to login)');
+        logout(showLogoutMsg: false);
       }
       if (isUserActive == false) {
         print('Logging out without message');

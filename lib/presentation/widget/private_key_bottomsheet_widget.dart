@@ -31,9 +31,12 @@ class PrivateKeyBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(
-              shortenString(privateKey, Constants.shortedAddressLength),
-              textAlign: TextAlign.left,
+            Flexible(
+              child: Text(
+                privateKey,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+              ),
             ),
             IconButton(
                 onPressed: () {

@@ -10,6 +10,7 @@ import 'package:mug/presentation/widget/help_information_widget.dart';
 // Project imports:
 import 'package:mug/presentation/widget/widget.dart';
 import 'package:mug/routes/routes.dart';
+import 'package:mug/service/local_storage_service.dart';
 import 'package:mug/service/provider.dart';
 
 class SettingView extends ConsumerStatefulWidget {
@@ -113,7 +114,7 @@ class _SettingViewState extends ConsumerState<SettingView> {
                   const Text("Timeout:", style: TextStyle(fontSize: 13)),
                   const HelpInfo(
                       message:
-                          'Session will automatically logout after this period of inactivity to protect your wallet.'),
+                          'App will automatically lock after this period of inactivity to protect your wallet.'),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Consumer(
@@ -134,10 +135,10 @@ class _SettingViewState extends ConsumerState<SettingView> {
                             );
                           }),
                           onChanged: (newIndex) async {
-                            if (newIndex != null) {
+                            if (newIndex != null && newIndex != currentIndex) {
                               await ref.read(localStorageServiceProvider).setInactivityTimeoutIndex(index: newIndex);
                               if (mounted) {
-                                informationSnackBarMessage(context, "Session timeout changed to ${timeoutLabels[newIndex]}. Will apply on next login.");
+                                informationSnackBarMessage(context, "Timeout changed to ${timeoutLabels[newIndex]}. Will apply on next unlock.");
                               }
                             }
                           },
@@ -149,51 +150,34 @@ class _SettingViewState extends ConsumerState<SettingView> {
               ),
             ),
             const Divider(height: 1),
-            ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: const Icon(Icons.fingerprint, size: 20),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Biometric Login:", style: TextStyle(fontSize: 13)),
-                  const HelpInfo(
-                      message:
-                          'Use fingerprint/face ID for quick login. Passphrase required every 5th login for security.'),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Consumer(
-                      builder: (context, ref, child) {
-                        final isBiometricEnabled = ref.watch(localStorageServiceProvider).isBiometricAuthEnabled;
-                        return Switch(
-                          value: isBiometricEnabled,
-                          onChanged: (value) async {
-                            if (value) {
-                              // Enable biometric
-                              await _showEnableBiometricDialog();
-                            } else {
-                              // Disable biometric
-                              await _showDisableBiometricDialog();
-                            }
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
+            // Show authentication mode info
+            if (ref.watch(localStorageServiceProvider).authenticationMode == AuthenticationMode.biometricOnly)
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: const Icon(Icons.fingerprint, size: 20),
+                title: const Text("Authentication: Biometric Only", style: TextStyle(fontSize: 13)),
+                subtitle: const Text("Unlock with biometric or device PIN", style: TextStyle(fontSize: 11)),
               ),
-            ),
+            if (ref.watch(localStorageServiceProvider).authenticationMode == AuthenticationMode.passphrase)
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: const Icon(Icons.password, size: 20),
+                title: const Text("Authentication: Passphrase", style: TextStyle(fontSize: 13)),
+                subtitle: const Text("Unlock with passphrase only", style: TextStyle(fontSize: 11)),
+              ),
             const Divider(height: 1),
             ListTile(
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: const Icon(Icons.logout, color: Colors.red, size: 20),
+              leading: const Icon(Icons.logout, color: Colors.orange, size: 20),
               title: const Text(
-                "Logout",
-                style: TextStyle(color: Colors.red, fontSize: 13),
+                "Lock App",
+                style: TextStyle(color: Colors.orange, fontSize: 13),
               ),
               onTap: () {
-                _showLogoutDialog();
+                _lockApp();
               },
             ),
             const Divider(height: 1),
@@ -221,13 +205,13 @@ class _SettingViewState extends ConsumerState<SettingView> {
     });
   }
 
-  void _showLogoutDialog() {
+  void _showLockDialog() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
+          title: const Text('Lock App'),
+          content: const Text('Are you sure you want to lock the app?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -236,10 +220,10 @@ class _SettingViewState extends ConsumerState<SettingView> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                _logout();
+                _lockApp();
               },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Logout'),
+              style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              child: const Text('Lock'),
             ),
           ],
         );
@@ -247,7 +231,7 @@ class _SettingViewState extends ConsumerState<SettingView> {
     );
   }
 
-  void _logout() {
+  void _lockApp() {
     ref.read(localStorageServiceProvider).setLoginStatus(false);
     Navigator.pushNamedAndRemoveUntil(
       context,
@@ -257,164 +241,6 @@ class _SettingViewState extends ConsumerState<SettingView> {
     );
   }
 
-  Future<void> _showEnableBiometricDialog() async {
-    // First check if device supports biometrics
-    final canUseBiometric = await ref.read(localStorageServiceProvider).canUseBiometrics();
-
-    if (!canUseBiometric) {
-      if (mounted) {
-        showGenericDialog(
-          context: context,
-          icon: Icons.error_outline,
-          message: "Biometric authentication is not available on this device. Please check your device settings.",
-        );
-      }
-      return;
-    }
-
-    // Show passphrase dialog
-    final passphraseController = TextEditingController();
-    bool isHidden = true;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Enable Biometric Login'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Enter your passphrase to enable biometric authentication:'),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: passphraseController,
-                    obscureText: isHidden,
-                    decoration: InputDecoration(
-                      labelText: 'Passphrase',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(isHidden ? Icons.visibility : Icons.visibility_off),
-                        onPressed: () {
-                          setState(() => isHidden = !isHidden);
-                        },
-                      ),
-                    ),
-                    autofocus: true,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    passphraseController.dispose();
-                    Navigator.of(context).pop(false);
-                  },
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    Navigator.of(context).pop(true);
-                  },
-                  child: const Text('Enable'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (confirmed == true) {
-      final passphrase = passphraseController.text;
-      passphraseController.dispose();
-
-      if (passphrase.isEmpty) {
-        if (mounted) {
-          informationSnackBarMessage(context, "Passphrase cannot be empty");
-        }
-        return;
-      }
-
-      // Show loading
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return WillPopScope(
-            onWillPop: () async => false,
-            child: const Dialog(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 20),
-                    Text('Setting up biometric authentication...'),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-
-      // Enable biometric
-      final success = await ref.read(localStorageServiceProvider).enableBiometricAuth(passphrase);
-
-      // Close loading
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-
-      if (mounted) {
-        if (success) {
-          informationSnackBarMessage(context, "Biometric authentication enabled successfully!");
-        } else {
-          informationSnackBarMessage(context, "Failed to enable biometric authentication. Please check your passphrase.");
-        }
-      }
-    } else {
-      passphraseController.dispose();
-    }
-  }
-
-  Future<void> _showDisableBiometricDialog() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Disable Biometric Login'),
-          content: const Text('Are you sure you want to disable biometric authentication? You will need to use your passphrase to login.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Disable'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed == true) {
-      final success = await ref.read(localStorageServiceProvider).disableBiometricAuth();
-
-      if (mounted) {
-        if (success) {
-          informationSnackBarMessage(context, "Biometric authentication disabled");
-        } else {
-          informationSnackBarMessage(context, "Failed to disable biometric authentication");
-        }
-      }
-    }
-  }
 
   @override
   void dispose() {
