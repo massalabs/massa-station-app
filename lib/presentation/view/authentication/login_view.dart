@@ -605,11 +605,13 @@ class _LoginViewState extends ConsumerState<LoginView> with AfterLayoutMixin<Log
   }
 
   void _showClearDataDialog() async {
-    final authMode = ref.read(localStorageServiceProvider).authenticationMode;
+    final storage = ref.read(localStorageServiceProvider);
 
-    // For Biometric Only mode, require biometric authentication first
-    if (authMode == AuthenticationMode.biometricOnly) {
-      // Authenticate with biometric
+    // Check if biometric is available on device
+    final canUseBiometric = await storage.canUseBiometrics();
+
+    // Require biometric authentication if available
+    if (canUseBiometric) {
       final authenticated = await auth.authenticate(
         localizedReason: 'Authenticate to clear all data',
         options: const AuthenticationOptions(

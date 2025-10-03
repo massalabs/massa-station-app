@@ -46,11 +46,11 @@ class SelectAuthModeView extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
-            // Biometric Only Option
+            // Biometric Option
             _buildModeCard(
               context: context,
               icon: Icons.fingerprint,
-              title: 'Biometric Only',
+              title: 'Biometric',
               subtitle: '',
               description: '• Random master key securely stored\n• Quick fingerprint/face unlock\n• Device PIN as fallback\n• Most convenient\n• But someone may steal your finger/face',
               onTap: () => _selectBiometricMode(context, ref),
