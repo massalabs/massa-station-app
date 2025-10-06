@@ -541,50 +541,6 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                             ],
                           ),
                         ),
-
-                        Container(
-                          color: Colors.transparent,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(left: 32.0, bottom: 16),
-                                child: FilledButton.tonalIcon(
-                                  onPressed: () async {
-                                    if (addressEntity.finalBalance < 2 * ref.read(settingProvider).feeAmount) {
-                                      informationSnackBarMessage(
-                                          context, "Wallet balance is less than the required fee amount");
-                                      return;
-                                    }
-                                    ref.read(screenTitleProvider.notifier).updateTitle("Transfer Fund");
-                                    await Navigator.pushNamed(
-                                      context,
-                                      WalletRoutes.transfer,
-                                      arguments: addressEntity,
-                                    );
-                                  },
-                                  icon: const Icon(Icons.arrow_outward),
-                                  label: const Text('Send'),
-                                  iconAlignment: IconAlignment.start,
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(right: 32.0, bottom: 16),
-                                child: FilledButton.tonalIcon(
-                                  onPressed: () {
-                                    receiveBottomSheet(context, isDarkTheme, widget.arg.address);
-                                  },
-                                  icon: Transform.rotate(
-                                    angle: 3.14,
-                                    child: const Icon(Icons.arrow_outward),
-                                  ),
-                                  label: const Text('Receive'),
-                                  iconAlignment: IconAlignment.start,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -615,6 +571,10 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                 Expanded(
                   child: FilledButton.tonalIcon(
                     onPressed: () async {
+                      if (addressEntity.finalBalance < 0) {
+                        informationSnackBarMessage(context, "Network unavailable - cannot send funds");
+                        return;
+                      }
                       if (addressEntity.finalBalance < 2 * ref.read(settingProvider).feeAmount) {
                         informationSnackBarMessage(context, "Wallet balance is less than the required fee amount");
                         return;
