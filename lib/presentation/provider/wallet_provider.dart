@@ -118,7 +118,12 @@ base class WalletProviderImpl extends StateNotifier<WalletState> implements Wall
         if (_walletCache.containsKey(address)) {
           state = WalletSuccess(addressEntity: _walletCache[address]!);
         } else {
-          state = WalletFailure(message: 'Something went wrong: $exception');
+          // Keep showing placeholder data (with -1 balance) instead of error
+          // The UI already shows placeholder from lines 53-67, don't change to error
+          if (kDebugMode) {
+            print('⚠️ Failed to load wallet $address: $exception (keeping placeholder)');
+          }
+          // Don't set WalletFailure - keep the existing WalletSuccess with placeholder
         }
     }
   }

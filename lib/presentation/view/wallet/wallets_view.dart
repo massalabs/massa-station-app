@@ -57,20 +57,30 @@ class _WalletsViewState extends ConsumerState<WalletsView> with AutomaticKeepAli
         },
         child: walletState.when(
           data: (wallets) {
-            if (wallets!.wallets.isEmpty) {
+            if (wallets == null || wallets.wallets.isEmpty) {
               return Column(
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                        "It is very lonely here! No wallet found! You can create a new wallet or import an existing wallet."),
+                  const SizedBox(height: 8),
+                  _addImport(context),
+                  const Expanded(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          "It is very lonely here! No wallet found! You can create a new wallet or import an existing wallet.",
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
                   ),
-                  _addImport(context)
                 ],
               );
             }
             return Column(
               children: [
+                const SizedBox(height: 8),
+                _addImport(context),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -105,7 +115,7 @@ class _WalletsViewState extends ConsumerState<WalletsView> with AutomaticKeepAli
                           final tapTime = DateTime.now();
                           print('🔵 Wallet tapped at: ${tapTime.millisecondsSinceEpoch}');
 
-                          final hasBalance =
+                          final hasBalance = wallet.addressInformation != null &&
                               wallet.addressInformation!.finalBalance >= ref.read(settingProvider).feeAmount;
                           final WalletViewArg walletViewArg = WalletViewArg(wallet.address, wallet.name, hasBalance);
 
@@ -131,7 +141,9 @@ class _WalletsViewState extends ConsumerState<WalletsView> with AutomaticKeepAli
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  formatNumber4(wallet.addressInformation!.finalBalance),
+                                  wallet.addressInformation != null && wallet.addressInformation!.finalBalance >= 0
+                                      ? formatNumber4(wallet.addressInformation!.finalBalance)
+                                      : '--',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(fontSize: 16),
                                 ),
@@ -148,7 +160,6 @@ class _WalletsViewState extends ConsumerState<WalletsView> with AutomaticKeepAli
                     },
                   ),
                 ),
-                _addImport(context)
               ],
             );
           },

@@ -150,8 +150,9 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
           },
           child: Consumer(
             builder: (context, ref, child) {
-              return switch (ref.watch(walletProvider)) {
-                WalletLoading() => const CircularProgressIndicator(),
+              final walletState = ref.watch(walletProvider);
+              return switch (walletState) {
+                WalletLoading() => const Center(child: CircularProgressIndicator()),
                 WalletSuccess(addressEntity: final addressEntity) => SingleChildScrollView(
                     padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
                     child: Column(
@@ -587,7 +588,8 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
                       ],
                     ),
                   ),
-                WalletFailure(message: final message) => Text(message),
+                // WalletFailure never occurs - we always show placeholder data
+                _ => const Center(child: CircularProgressIndicator()),
               };
             },
           ),
@@ -831,22 +833,27 @@ class _WalletViewState extends ConsumerState<WalletView> with AutomaticKeepAlive
       ref.invalidate(smartContractServiceProvider);
     }
 
+    if (!mounted) return;
+
+    if (kDebugMode) {
+      print('Clearing wallet selection to go back to list');
+    }
+
+    // Clear the wallet selection to return to wallet list
+    ref.read(walletSelectionProvider.notifier).clearSelection();
+
+    // Reload wallet list
+    if (kDebugMode) {
+      print('Reloading wallet list');
+    }
+    await ref.read(walletListProvider.notifier).loadWallets();
+
+    if (kDebugMode) {
+      print('Showing success message');
+    }
+
+    // Check mounted again after async operations
     if (mounted) {
-      if (kDebugMode) {
-        print('Clearing wallet selection to go back to list');
-      }
-      // Clear the wallet selection to return to wallet list
-      ref.read(walletSelectionProvider.notifier).clearSelection();
-
-      // Reload wallet list
-      if (kDebugMode) {
-        print('Reloading wallet list');
-      }
-      await ref.read(walletListProvider.notifier).loadWallets();
-
-      if (kDebugMode) {
-        print('Showing success message');
-      }
       informationSnackBarMessage(context, "Wallet removed successfully!");
     }
   }
